@@ -48,6 +48,12 @@ public static class PlayerPhysics_LateUpdate
 
             if (!deadBody || deadBody.Reported) continue;  // Only draw tracers for unreported dead bodies
             TracersHandler.DrawBodyTracer(deadBody);
+
+            if (CheatToggles.autoReportBodies)
+            {
+                PlayerControl.LocalPlayer.CmdReportDeadBody(GameData.Instance.GetPlayerById(deadBody.ParentId));
+                break;
+            }
         }
 
         try
