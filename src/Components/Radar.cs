@@ -73,6 +73,27 @@ public sealed class Radar : MonoBehaviour
     private bool _freezeBodiesForMeeting;
     private ShipStatus _lastShip;
 
+    private void CacheAllPlayerMapLocal()
+    {
+        if (!Utils.isShip || ShipStatus.Instance == null) return;
+
+        var players = PlayerControl.AllPlayerControls;
+        if (players == null) return;
+
+        for (var i = 0; i < players.Count; i++)
+        {
+            var p = players[i];
+            if (p == null) continue;
+            if (p.Data == null) continue;
+
+            var id = p.PlayerId;
+            var pos = p.transform.position;
+            pos /= ShipStatus.Instance.MapScale;
+            pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
+            _playerMapLocalById[id] = new Vector2(pos.x, pos.y);
+        }
+    }
+
     private void Update()
     {
         if (!CheatToggles.minimapAlwaysOn || MalumMenu.isPanicked)
@@ -91,6 +112,11 @@ public sealed class Radar : MonoBehaviour
         }
 
         var meeting = Utils.isMeeting;
+        if (!meeting)
+        {
+            CacheAllPlayerMapLocal();
+        }
+
         if (meeting && !_wasMeeting)
         {
             _wasMeeting = true;
@@ -1058,25 +1084,6 @@ public sealed class Radar : MonoBehaviour
     private void SnapshotPlayersForMeeting()
     {
         _freezePlayersForMeeting = true;
-
-        if (Utils.isShip && ShipStatus.Instance != null)
-        {
-            var players = PlayerControl.AllPlayerControls;
-            if (players != null)
-            {
-                for (var i = 0; i < players.Count; i++)
-                {
-                    var p = players[i];
-                    if (p == null) continue;
-
-                    var id = p.PlayerId;
-                    var pos = p.transform.position;
-                    pos /= ShipStatus.Instance.MapScale;
-                    pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
-                    _playerMapLocalById[id] = new Vector2(pos.x, pos.y);
-                }
-            }
-        }
 
         _frozenPlayerMapLocalById.Clear();
         foreach (var kvp in _playerMapLocalById)
