@@ -31,6 +31,8 @@ public sealed class Radar : MonoBehaviour
 
     private readonly Dictionary<byte, RadarPlayerUi> _uiByPlayer = new Dictionary<byte, RadarPlayerUi>(16);
     private readonly List<byte> _tmpRemove = new List<byte>(16);
+    private readonly Dictionary<byte, Vector2> _playerMapLocalById = new Dictionary<byte, Vector2>(16);
+    private readonly Dictionary<byte, Vector2> _frozenPlayerMapLocalById = new Dictionary<byte, Vector2>(16);
     private readonly Dictionary<int, Image> _bodyUiById = new Dictionary<int, Image>(16);
     private readonly List<int> _tmpRemoveBodies = new List<int>(16);
     private readonly Dictionary<int, Vector2> _bodyMapLocalById = new Dictionary<int, Vector2>(16);
@@ -67,6 +69,7 @@ public sealed class Radar : MonoBehaviour
     private bool _wasMeeting;
     private float _meetingFreezeNow;
     private float _nextBodyScanTime;
+    private bool _freezePlayersForMeeting;
     private bool _freezeBodiesForMeeting;
     private ShipStatus _lastShip;
 
@@ -84,6 +87,7 @@ public sealed class Radar : MonoBehaviour
         {
             _lastShip = ship;
             ClearBodies();
+            ClearPlayers();
         }
 
         var meeting = Utils.isMeeting;
@@ -91,11 +95,14 @@ public sealed class Radar : MonoBehaviour
         {
             _wasMeeting = true;
             _meetingFreezeNow = Time.time;
+            SnapshotPlayersForMeeting();
             SnapshotBodiesForMeeting();
         }
         else if (!meeting && _wasMeeting)
         {
             _wasMeeting = false;
+            _freezePlayersForMeeting = false;
+            _frozenPlayerMapLocalById.Clear();
             _freezeBodiesForMeeting = false;
             _frozenBodyMapLocalById.Clear();
         }
@@ -833,10 +840,25 @@ public sealed class Radar : MonoBehaviour
             ui.lastHighlightSize = haloSize;
         }
 
-        var pos = p.transform.position;
-        pos /= ShipStatus.Instance.MapScale;
-        pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
-        var mapLocal = new Vector2(pos.x, pos.y);
+        Vector2 mapLocal;
+        if (_freezePlayersForMeeting && _frozenPlayerMapLocalById.TryGetValue(id, out var frozen))
+        {
+            mapLocal = frozen;
+        }
+        else
+        {
+            var pos = p.transform.position;
+            pos /= ShipStatus.Instance.MapScale;
+            pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
+            mapLocal = new Vector2(pos.x, pos.y);
+            _playerMapLocalById[id] = mapLocal;
+        }
+
+        if (ui.trail != null && _freezePlayersForMeeting)
+        {
+            ui.trail.headPoint = mapLocal;
+            ui.trail.hasHeadPoint = true;
+        }
 
         if (!TryMapLocalToAnchored(mapLocal, out var anchored))
         {
@@ -1033,6 +1055,47 @@ public sealed class Radar : MonoBehaviour
         }
     }
 
+    private void SnapshotPlayersForMeeting()
+    {
+        _freezePlayersForMeeting = true;
+
+        if (Utils.isShip && ShipStatus.Instance != null)
+        {
+            var players = PlayerControl.AllPlayerControls;
+            if (players != null)
+            {
+                for (var i = 0; i < players.Count; i++)
+                {
+                    var p = players[i];
+                    if (p == null) continue;
+
+                    var id = p.PlayerId;
+                    var pos = p.transform.position;
+                    pos /= ShipStatus.Instance.MapScale;
+                    pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
+                    _playerMapLocalById[id] = new Vector2(pos.x, pos.y);
+                }
+            }
+        }
+
+        _frozenPlayerMapLocalById.Clear();
+        foreach (var kvp in _playerMapLocalById)
+        {
+            _frozenPlayerMapLocalById[kvp.Key] = kvp.Value;
+        }
+
+        foreach (var kvp in _uiByPlayer)
+        {
+            var ui = kvp.Value;
+            if (ui == null || ui.trail == null) continue;
+            if (_frozenPlayerMapLocalById.TryGetValue(ui.id, out var mapLocal))
+            {
+                ui.trail.headPoint = mapLocal;
+                ui.trail.hasHeadPoint = true;
+            }
+        }
+    }
+
     private void UpdateBodiesFrozen()
     {
         _tmpRemoveBodies.Clear();
@@ -1103,6 +1166,13 @@ public sealed class Radar : MonoBehaviour
         _bodyMapLocalById.Clear();
         _frozenBodyMapLocalById.Clear();
         _freezeBodiesForMeeting = false;
+    }
+
+    private void ClearPlayers()
+    {
+        _playerMapLocalById.Clear();
+        _frozenPlayerMapLocalById.Clear();
+        _freezePlayersForMeeting = false;
     }
 
     private void RemoveTmpBody(int id)

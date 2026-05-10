@@ -244,6 +244,121 @@ public static class Utils
         }
     }
 
+    public static bool TryUndoTask(PlayerTask task, out string detail)
+    {
+        detail = null;
+        if (task == null) { detail = "task null"; return false; }
+        if (!isClient) { detail = "not client"; return false; }
+        if (!isPlayer) { detail = "not player"; return false; }
+        if (isOnlineGame) { detail = "online game"; return false; }
+
+        var complete = false;
+        try { complete = task.IsComplete; } catch { complete = false; }
+        if (!complete) { detail = "not complete"; return false; }
+
+        var changed = false;
+
+        try
+        {
+            if (task is NormalPlayerTask npt)
+            {
+                npt.taskStep = 0;
+                changed = true;
+
+                try
+                {
+                    npt.UpdateArrowAndLocation();
+                }
+                catch
+                {
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            changed |= TrySetCompleteFlag(task, false);
+        }
+        catch
+        {
+        }
+
+        var completeAfter = true;
+        try { completeAfter = task.IsComplete; } catch { completeAfter = true; }
+
+        if (!completeAfter)
+        {
+            detail = changed ? "ok" : "ok (no fields changed)";
+            return true;
+        }
+
+        detail = changed ? "changed but still complete" : "no undo method found";
+        return false;
+    }
+
+    private static bool TrySetCompleteFlag(object obj, bool value)
+    {
+        if (obj == null) return false;
+        var t = obj.GetType();
+        if (t == null) return false;
+
+        var changed = false;
+        var cur = t;
+        while (cur != null)
+        {
+            try
+            {
+                var fields = AccessTools.GetDeclaredFields(cur);
+                if (fields != null)
+                {
+                    for (var i = 0; i < fields.Count; i++)
+                    {
+                        var f = fields[i];
+                        if (f == null) continue;
+                        if (f.IsInitOnly) continue;
+                        if (f.FieldType != typeof(bool)) continue;
+                        var name = f.Name ?? "";
+                        var ln = name.ToLowerInvariant();
+                        if (!ln.Contains("complete")) continue;
+                        try { f.SetValue(obj, value); changed = true; } catch { }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                var props = AccessTools.GetDeclaredProperties(cur);
+                if (props != null)
+                {
+                    for (var i = 0; i < props.Count; i++)
+                    {
+                        var p = props[i];
+                        if (p == null) continue;
+                        if (p.PropertyType != typeof(bool)) continue;
+                        if (!p.CanWrite) continue;
+                        var name = p.Name ?? "";
+                        var ln = name.ToLowerInvariant();
+                        if (!ln.Contains("complete")) continue;
+                        try { p.SetValue(obj, value, null); changed = true; } catch { }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            cur = cur.BaseType;
+        }
+
+        return changed;
+    }
+
     // Opens Chat UI
     public static void OpenChat()
     {
@@ -257,9 +372,9 @@ public static class Utils
                 DestroyableSingleton<FriendsListManager>.Instance.SetFriendButtonColor(true);
             }
             if (DestroyableSingleton<HudManager>.Instance.Chat.chatNotification.gameObject.activeSelf)
-			{
-				DestroyableSingleton<HudManager>.Instance.Chat.chatNotification.Close();
-			}
+            {
+                DestroyableSingleton<HudManager>.Instance.Chat.chatNotification.Close();
+            }
         }
 
     }
@@ -332,7 +447,7 @@ public static class Utils
     {
 
         Vector2 vector = target.GetTruePosition() - source.GetTruePosition();
-		float magnitude = vector.magnitude;
+        float magnitude = vector.magnitude;
 
         return magnitude;
 
@@ -420,7 +535,7 @@ public static class Utils
     public static KeyCode StringToKeycode(string keyCodeStr)
     {
 
-        if(!string.IsNullOrEmpty(keyCodeStr)) // Empty strings are automatically invalid
+        if (!string.IsNullOrEmpty(keyCodeStr)) // Empty strings are automatically invalid
         {
             try
             {
@@ -448,7 +563,8 @@ public static class Utils
                 platform = (Platforms)Enum.Parse(typeof(Platforms), platformStr, true);
 
                 return true; // If platform type is valid, return false
-            }catch{}
+            }
+            catch { }
         }
 
         platform = null;
@@ -577,13 +693,14 @@ public static class Utils
         var players = PlayerControl.AllPlayerControls.ToArray();
 
         for (int i = 0; i < players.Count; i++)
-		{   NetworkedPlayerInfo playerData = players[i].Data;
+        {
+            NetworkedPlayerInfo playerData = players[i].Data;
 
-			if (playerData.ClientId == clientId)
-			{
-				return playerData;
-			}
-		}
+            if (playerData.ClientId == clientId)
+            {
+                return playerData;
+            }
+        }
 
         return null; // Returns null if no matching player is found
     }

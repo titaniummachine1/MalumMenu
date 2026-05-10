@@ -57,6 +57,7 @@ public class TasksTab : ITab
         GUILayout.Label("Timings", GUIStylePreset.TabSubtitle);
 
         CheatToggles.recordTaskTimes = GUILayout.Toggle(CheatToggles.recordTaskTimes, " Record Task Times");
+        GUILayout.Label(" Task times are auto-saved to: " + TaskTimeStore.GetSavePath());
 
         var seconds = MalumMenu.autoTaskDefaultSeconds.Value;
         GUILayout.Label($" Default Auto Time: {seconds:0.00}s");

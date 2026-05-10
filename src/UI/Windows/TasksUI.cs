@@ -103,6 +103,16 @@ public class TasksUI : MonoBehaviour
                     if (task.IsComplete)
                     {
                         GUILayout.Label("<color=#00ff00>✔ Complete</color>");
+                        if (player == PlayerControl.LocalPlayer && !Utils.isOnlineGame)
+                        {
+                            if (GUILayout.Button("Undo", GUIStylePreset.NormalButton))
+                            {
+                                if (!Utils.TryUndoTask(task, out var detail))
+                                {
+                                    Utils.ShowNewPopup("Undo failed: " + (detail ?? "unknown"));
+                                }
+                            }
+                        }
                     }
                     else
                     {
