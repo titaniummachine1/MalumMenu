@@ -22,7 +22,7 @@ public sealed class Radar : MonoBehaviour
     private const float TrailWidth = 2f;
     private const int TrailMaxWaypoints = 256;
     private const float TrailWaypointIntervalSeconds = 0.25f;
-    private const int TrailMaxSegments = 64;
+    private const int TrailMaxSegments = 128;
     private const float TrailAlphaStart = 0.85f;
     private const float TrailAlphaEnd = 0.60f;
 
@@ -37,6 +37,9 @@ public sealed class Radar : MonoBehaviour
     private readonly List<int> _tmpRemoveBodies = new List<int>(16);
     private readonly Dictionary<int, Vector2> _bodyMapLocalById = new Dictionary<int, Vector2>(16);
     private readonly Dictionary<int, Vector2> _frozenBodyMapLocalById = new Dictionary<int, Vector2>(16);
+    private readonly Dictionary<int, SpriteRenderer> _mapBodyById = new Dictionary<int, SpriteRenderer>(16);
+    private readonly Dictionary<byte, SpriteRenderer> _mapDotByPlayerId = new Dictionary<byte, SpriteRenderer>(16);
+    private readonly Dictionary<byte, SpriteRenderer> _mapHaloByPlayerId = new Dictionary<byte, SpriteRenderer>(16);
 
     private Canvas _canvas;
     private CanvasScaler _scaler;
@@ -72,6 +75,12 @@ public sealed class Radar : MonoBehaviour
     private bool _freezePlayersForMeeting;
     private bool _freezeBodiesForMeeting;
     private ShipStatus _lastShip;
+    private Transform _mapOverlayRoot;
+
+    private const float BigMapBodySize = 0.28f;
+    private const float BigMapTrailWidth = 0.05f;
+    private const float BigMapDotSize = 0.24f;
+    private const float BigMapHaloSize = 0.34f;
 
     private void CacheAllPlayerMapLocal()
     {
@@ -94,11 +103,463 @@ public sealed class Radar : MonoBehaviour
         }
     }
 
+    private void EnsureBigMapOverlay()
+    {
+        if (_mapOverlayRoot != null) return;
+        if (_mapSpace == null) return;
+
+        var go = new GameObject("MalumMapOverlay");
+        go.hideFlags = HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild;
+        go.transform.SetParent(_mapSpace, false);
+        go.transform.localPosition = Vector3.zero;
+        go.transform.localRotation = Quaternion.identity;
+        go.transform.localScale = Vector3.one;
+        _mapOverlayRoot = go.transform;
+    }
+
+    private void SetBigMapOverlayVisible(bool visible)
+    {
+        if (_mapOverlayRoot == null) return;
+        if (_mapOverlayRoot.gameObject.activeSelf == visible) return;
+        _mapOverlayRoot.gameObject.SetActive(visible);
+    }
+
+    private void ApplyBigMapSorting(SpriteRenderer sr, int extraOrder)
+    {
+        if (sr == null) return;
+        if (_bgRenderer != null)
+        {
+            try
+            {
+                sr.sortingLayerID = _bgRenderer.sortingLayerID;
+                sr.sortingOrder = _bgRenderer.sortingOrder + extraOrder;
+                return;
+            }
+            catch
+            {
+            }
+        }
+        sr.sortingOrder = extraOrder;
+    }
+
+    private void UpdateBigMapOverlay()
+    {
+        if (_mapSpace == null) return;
+        EnsureBigMapOverlay();
+        SetBigMapOverlayVisible(true);
+
+        UpdateBigMapPlayers();
+        UpdateBigMapBodies();
+        UpdateBigMapTrails();
+    }
+
+    private void UpdateBigMapPlayers()
+    {
+        if (_mapOverlayRoot == null) return;
+
+        var players = PlayerControl.AllPlayerControls;
+        if (players == null)
+        {
+            ClearMapPlayers();
+            return;
+        }
+
+        _tmpRemove.Clear();
+        foreach (var kvp in _mapDotByPlayerId)
+        {
+            _tmpRemove.Add(kvp.Key);
+        }
+
+        for (var i = 0; i < players.Count; i++)
+        {
+            var p = players[i];
+            if (p == null || p.Data == null) continue;
+
+            var id = p.PlayerId;
+            RemoveTmp(id);
+
+            var isImp = p.Data.Role != null && p.Data.Role.IsImpostor;
+            var isDead = p.Data.IsDead;
+
+            var show = false;
+            if (isDead) show = CheatToggles.mapGhosts;
+            else if (isImp) show = CheatToggles.mapImps;
+            else show = CheatToggles.mapCrew;
+
+            if (!show)
+            {
+                DisableMapPlayer(id);
+                continue;
+            }
+
+            Vector2 mapLocal;
+            if (_freezePlayersForMeeting && _frozenPlayerMapLocalById.TryGetValue(id, out var frozen))
+            {
+                mapLocal = frozen;
+            }
+            else if (_playerMapLocalById.TryGetValue(id, out var cached))
+            {
+                mapLocal = cached;
+            }
+            else
+            {
+                var pos = p.transform.position;
+                pos /= ShipStatus.Instance.MapScale;
+                pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
+                mapLocal = new Vector2(pos.x, pos.y);
+                _playerMapLocalById[id] = mapLocal;
+            }
+
+            var dot = GetOrCreateMapDot(id);
+            dot.transform.localPosition = new Vector3(mapLocal.x, mapLocal.y, 0f);
+            dot.transform.localScale = new Vector3(BigMapDotSize, BigMapDotSize, 1f);
+            ApplyMapDotColor(dot, p, isImp, isDead);
+            dot.enabled = true;
+
+            var halo = GetOrCreateMapHalo(id);
+            var showHalo = CheatToggles.mapImpsHighlight && isImp && !isDead;
+            halo.enabled = showHalo;
+            if (showHalo)
+            {
+                halo.transform.localPosition = new Vector3(mapLocal.x, mapLocal.y, 0f);
+                halo.transform.localScale = new Vector3(BigMapHaloSize, BigMapHaloSize, 1f);
+                halo.color = new Color(1f, 0f, 0f, 0.60f);
+            }
+        }
+
+        for (var i = 0; i < _tmpRemove.Count; i++)
+        {
+            var id = _tmpRemove[i];
+            DisableMapPlayer(id);
+        }
+    }
+
+    private SpriteRenderer GetOrCreateMapDot(byte id)
+    {
+        if (_mapDotByPlayerId.TryGetValue(id, out var sr) && sr != null) return sr;
+
+        var go = new GameObject("Dot");
+        go.hideFlags = HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild;
+        go.transform.SetParent(_mapOverlayRoot, false);
+        go.transform.localRotation = Quaternion.identity;
+        go.transform.localScale = Vector3.one;
+        sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = _iconSprite != null ? _iconSprite : GetFallbackSprite();
+        ApplyBigMapSorting(sr, 62);
+        sr.enabled = false;
+
+        _mapDotByPlayerId[id] = sr;
+        return sr;
+    }
+
+    private SpriteRenderer GetOrCreateMapHalo(byte id)
+    {
+        if (_mapHaloByPlayerId.TryGetValue(id, out var sr) && sr != null) return sr;
+
+        var go = new GameObject("Halo");
+        go.hideFlags = HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild;
+        go.transform.SetParent(_mapOverlayRoot, false);
+        go.transform.localRotation = Quaternion.identity;
+        go.transform.localScale = Vector3.one;
+        sr = go.AddComponent<SpriteRenderer>();
+        sr.sprite = GetRadialSprite();
+        ApplyBigMapSorting(sr, 61);
+        sr.enabled = false;
+
+        _mapHaloByPlayerId[id] = sr;
+        return sr;
+    }
+
+    private void ApplyMapDotColor(SpriteRenderer sr, PlayerControl p, bool isImp, bool isDead)
+    {
+        if (sr == null) return;
+
+        if (_iconBaseMaterial != null)
+        {
+            try
+            {
+                var m = sr.material;
+                if (m == null || m.shader != _iconBaseMaterial.shader)
+                {
+                    sr.material = new Material(_iconBaseMaterial);
+                    m = sr.material;
+                }
+
+                var c = ResolvePlayerColor(p, isImp, isDead);
+                m.SetColor(PlayerMaterial.BackColor, c);
+                m.SetColor(PlayerMaterial.BodyColor, c);
+                m.SetColor(PlayerMaterial.VisorColor, Palette.VisorColor);
+                sr.color = Color.white;
+                return;
+            }
+            catch
+            {
+            }
+        }
+
+        sr.color = ResolvePlayerColor(p, isImp, isDead);
+    }
+
+    private void DisableMapPlayer(byte id)
+    {
+        if (_mapDotByPlayerId.TryGetValue(id, out var dot) && dot != null) dot.enabled = false;
+        if (_mapHaloByPlayerId.TryGetValue(id, out var halo) && halo != null) halo.enabled = false;
+    }
+
+    private void ClearMapPlayers()
+    {
+        foreach (var kvp in _mapDotByPlayerId)
+        {
+            var sr = kvp.Value;
+            if (sr == null) continue;
+            try { Object.Destroy(sr.gameObject); } catch { }
+        }
+        foreach (var kvp in _mapHaloByPlayerId)
+        {
+            var sr = kvp.Value;
+            if (sr == null) continue;
+            try { Object.Destroy(sr.gameObject); } catch { }
+        }
+        _mapDotByPlayerId.Clear();
+        _mapHaloByPlayerId.Clear();
+        _tmpRemove.Clear();
+    }
+
+    private void UpdateBigMapBodies()
+    {
+        if (_mapOverlayRoot == null) return;
+
+        var source = _freezeBodiesForMeeting ? _frozenBodyMapLocalById : _bodyMapLocalById;
+
+        _tmpRemoveBodies.Clear();
+        foreach (var kvp in _mapBodyById)
+        {
+            _tmpRemoveBodies.Add(kvp.Key);
+        }
+
+        foreach (var kvp in source)
+        {
+            var id = kvp.Key;
+            RemoveTmpBody(id);
+
+            if (!_mapBodyById.TryGetValue(id, out var sr) || sr == null)
+            {
+                var go = new GameObject("Body");
+                go.hideFlags = HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild;
+                go.transform.SetParent(_mapOverlayRoot, false);
+                go.transform.localRotation = Quaternion.identity;
+                go.transform.localScale = Vector3.one;
+                sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = GetRadialSprite();
+                ApplyBigMapSorting(sr, 50);
+                _mapBodyById[id] = sr;
+            }
+
+            var p = kvp.Value;
+            sr.transform.localPosition = new Vector3(p.x, p.y, 0f);
+            sr.transform.localScale = new Vector3(BigMapBodySize, BigMapBodySize, 1f);
+            sr.color = new Color(0f, 1f, 0f, 0.85f);
+            sr.enabled = true;
+        }
+
+        for (var i = 0; i < _tmpRemoveBodies.Count; i++)
+        {
+            var id = _tmpRemoveBodies[i];
+            if (_mapBodyById.TryGetValue(id, out var sr) && sr != null)
+            {
+                try { Object.Destroy(sr.gameObject); } catch { }
+            }
+            _mapBodyById.Remove(id);
+        }
+    }
+
+    private void EnsureBigMapTrailSegments(RadarTrail trail, int needed)
+    {
+        if (trail == null) return;
+        if (trail.mapSegments == null) return;
+        if (needed < 0) needed = 0;
+        if (needed > TrailMaxSegments) needed = TrailMaxSegments;
+
+        while (trail.mapSegments.Count < needed)
+        {
+            var go = new GameObject("TrailSeg");
+            go.hideFlags = HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild;
+            go.transform.SetParent(_mapOverlayRoot, false);
+            go.transform.localRotation = Quaternion.identity;
+            go.transform.localScale = Vector3.one;
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = GetFallbackSprite();
+            sr.drawMode = SpriteDrawMode.Sliced;
+            sr.size = new Vector2(1f, 1f);
+            ApplyBigMapSorting(sr, 40);
+            sr.enabled = false;
+            trail.mapSegments.Add(sr);
+        }
+    }
+
+    private void UpdateBigMapTrails()
+    {
+        if (_mapOverlayRoot == null) return;
+        if (!CheatToggles.mapTrails) { DisableAllBigMapTrails(); return; }
+        if (!Utils.isShip || ShipStatus.Instance == null) { DisableAllBigMapTrails(); return; }
+
+        var now = _wasMeeting ? _meetingFreezeNow : Time.time;
+        var keepSeconds = MinimapHandler.trailSeconds;
+        if (keepSeconds < 5f) keepSeconds = 5f;
+        if (keepSeconds > 60f) keepSeconds = 60f;
+
+        var players = PlayerControl.AllPlayerControls;
+        if (players == null) { DisableAllBigMapTrails(); return; }
+
+        for (var i = 0; i < players.Count; i++)
+        {
+            var p = players[i];
+            if (p == null || p.Data == null) continue;
+            if (!_uiByPlayer.TryGetValue(p.PlayerId, out var ui) || ui == null || ui.trail == null) continue;
+
+            var isImp = p.Data.Role != null && p.Data.Role.IsImpostor;
+            var isDead = p.Data.IsDead;
+
+            var show = false;
+            if (isDead) show = CheatToggles.mapGhosts;
+            else if (isImp) show = CheatToggles.mapImps;
+            else show = CheatToggles.mapCrew;
+
+            if (!show)
+            {
+                DisableBigMapTrail(ui.trail);
+                continue;
+            }
+
+            RenderBigMapTrail(ui.trail, now, keepSeconds);
+        }
+    }
+
+    private void DisableAllBigMapTrails()
+    {
+        foreach (var kvp in _uiByPlayer)
+        {
+            var ui = kvp.Value;
+            if (ui == null || ui.trail == null) continue;
+            DisableBigMapTrail(ui.trail);
+        }
+    }
+
+    private static void DisableBigMapTrail(RadarTrail trail)
+    {
+        if (trail == null || trail.mapSegments == null) return;
+        for (var i = 0; i < trail.mapSegments.Count; i++)
+        {
+            if (trail.mapSegments[i] != null) trail.mapSegments[i].enabled = false;
+        }
+    }
+
+    private void RenderBigMapTrail(RadarTrail trail, float now, float keepSeconds)
+    {
+        if (trail == null || trail.mapSegments == null) return;
+
+        var count = trail.count;
+        if (count <= 0)
+        {
+            DisableBigMapTrail(trail);
+            return;
+        }
+
+        var rawSegments = trail.hasHeadPoint ? count : (count - 1);
+        if (rawSegments <= 0)
+        {
+            DisableBigMapTrail(trail);
+            return;
+        }
+
+        var needed = rawSegments;
+        if (needed > TrailMaxSegments) needed = TrailMaxSegments;
+
+        EnsureBigMapTrailSegments(trail, needed);
+
+        for (var i = 0; i < trail.mapSegments.Count; i++)
+        {
+            if (trail.mapSegments[i] != null) trail.mapSegments[i].enabled = i < needed;
+        }
+
+        var newestIdx = (trail.start + trail.count - 1) % TrailMaxWaypoints;
+        var fromLocal = trail.hasHeadPoint ? trail.headPoint : trail.points[newestIdx];
+        var idx = newestIdx;
+        var remainingLinks = trail.hasHeadPoint ? trail.count : (trail.count - 1);
+
+        for (var i = 0; i < needed; i++)
+        {
+            var sr = trail.mapSegments[i];
+            if (sr == null)
+            {
+                remainingLinks--;
+                continue;
+            }
+
+            if (remainingLinks <= 0)
+            {
+                sr.enabled = false;
+                continue;
+            }
+
+            Vector2 toLocal;
+            float toTime;
+            if (trail.hasHeadPoint && i == 0)
+            {
+                toLocal = trail.points[newestIdx];
+                toTime = trail.times[newestIdx];
+            }
+            else
+            {
+                idx = (idx - 1 + TrailMaxWaypoints) % TrailMaxWaypoints;
+                toLocal = trail.points[idx];
+                toTime = trail.times[idx];
+            }
+            remainingLinks--;
+
+            var d = toLocal - fromLocal;
+            var len = d.magnitude;
+            if (len < 0.001f)
+            {
+                sr.enabled = false;
+                fromLocal = toLocal;
+                continue;
+            }
+
+            var mid = (fromLocal + toLocal) * 0.5f;
+            var angle = Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg;
+
+            var age = now - toTime;
+            var t = keepSeconds > 0.001f ? Mathf.Clamp01(age / keepSeconds) : 1f;
+            var alpha = Mathf.Lerp(TrailAlphaStart, TrailAlphaEnd, t);
+
+            sr.transform.localPosition = new Vector3(mid.x, mid.y, 0f);
+            sr.transform.localRotation = Quaternion.Euler(0f, 0f, angle);
+            sr.transform.localScale = new Vector3(len, BigMapTrailWidth, 1f);
+            sr.color = new Color(trail.color.r, trail.color.g, trail.color.b, alpha);
+            sr.enabled = true;
+
+            fromLocal = toLocal;
+        }
+    }
+
     private void Update()
     {
-        if (!CheatToggles.minimapAlwaysOn || MalumMenu.isPanicked)
+        if (MalumMenu.isPanicked)
         {
             SetVisible(false);
+            SetBigMapOverlayVisible(false);
+            _dragging = false;
+            return;
+        }
+
+        var map = MapBehaviour.Instance;
+        var mapOpen = map != null && map.gameObject != null && map.gameObject.activeInHierarchy;
+
+        if (!CheatToggles.minimapAlwaysOn && !mapOpen)
+        {
+            SetVisible(false);
+            SetBigMapOverlayVisible(false);
             _dragging = false;
             return;
         }
@@ -133,24 +594,32 @@ public sealed class Radar : MonoBehaviour
             _frozenBodyMapLocalById.Clear();
         }
 
-        var map = MapBehaviour.Instance;
-        if (map != null && map.gameObject != null && map.gameObject.activeInHierarchy)
+        if (mapOpen)
         {
             EnsureUi();
             SetVisible(false);
             _dragging = false;
 
-            if (Time.unscaledTime >= _nextTemplateScanTime)
+            if (_template != map || _mapSpace == null || _bgRenderer == null)
+            {
+                RefreshTemplate();
+            }
+            else if (Time.unscaledTime >= _nextTemplateScanTime)
             {
                 _nextTemplateScanTime = Time.unscaledTime + 1f;
                 RefreshTemplate();
             }
 
             UpdateBackground();
+            UpdatePlayers();
+            UpdateBodies();
+            UpdateTrails();
+            UpdateBigMapOverlay();
             return;
         }
 
         EnsureUi();
+        SetBigMapOverlayVisible(false);
         SetVisible(true);
 
         var s = Mathf.Clamp(scale, MinScale, MaxScale);
@@ -786,6 +1255,14 @@ public sealed class Radar : MonoBehaviour
                 try { Object.Destroy(seg.gameObject); } catch { }
             }
             ui.trail.segments.Clear();
+
+            for (var i = 0; i < ui.trail.mapSegments.Count; i++)
+            {
+                var seg = ui.trail.mapSegments[i];
+                if (seg == null) continue;
+                try { Object.Destroy(seg.gameObject); } catch { }
+            }
+            ui.trail.mapSegments.Clear();
         }
     }
 
@@ -1162,6 +1639,20 @@ public sealed class Radar : MonoBehaviour
 
     private void ClearBodies()
     {
+        if (_mapOverlayRoot != null)
+        {
+            try { Object.Destroy(_mapOverlayRoot.gameObject); } catch { }
+            _mapOverlayRoot = null;
+        }
+        _mapBodyById.Clear();
+        ClearMapPlayers();
+        foreach (var kvp in _uiByPlayer)
+        {
+            var ui = kvp.Value;
+            if (ui == null || ui.trail == null) continue;
+            ui.trail.mapSegments.Clear();
+        }
+
         foreach (var kvp in _bodyUiById)
         {
             var img = kvp.Value;

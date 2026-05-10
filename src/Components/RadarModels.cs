@@ -14,6 +14,7 @@ internal sealed class RadarTrail
     public Vector2 headPoint;
     public bool hasHeadPoint;
     public readonly List<Image> segments;
+    public readonly List<SpriteRenderer> mapSegments;
     public Color color;
 
     public RadarTrail(int maxWaypoints)
@@ -21,6 +22,7 @@ internal sealed class RadarTrail
         points = new Vector2[maxWaypoints];
         times = new float[maxWaypoints];
         segments = new List<Image>(maxWaypoints);
+        mapSegments = new List<SpriteRenderer>(maxWaypoints);
     }
 }
 

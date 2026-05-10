@@ -79,7 +79,9 @@ public static class TaskTimeStore
     public static bool TryGetBest(int mapId, int taskId, int taskType, out float seconds)
     {
         Load();
-        return BestSeconds.TryGetValue(MakeKey(mapId, taskId, taskType), out seconds);
+        if (BestSeconds.TryGetValue(MakeKey(mapId, taskId, taskType), out seconds)) return true;
+        if (taskId != 0 && taskType != -1 && BestSeconds.TryGetValue(MakeKey(mapId, 0, taskType), out seconds)) return true;
+        return false;
     }
 
     public static void Record(int mapId, int taskId, int taskType, float seconds)
@@ -87,14 +89,13 @@ public static class TaskTimeStore
         Load();
         if (seconds <= 0f) return;
 
-        var key = MakeKey(mapId, taskId, taskType);
-        if (BestSeconds.TryGetValue(key, out var existing))
+        var changed = false;
+        changed |= TrySetBest(MakeKey(mapId, taskId, taskType), seconds);
+        if (taskId != 0 && taskType != -1)
         {
-            if (seconds >= existing) return;
+            changed |= TrySetBest(MakeKey(mapId, 0, taskType), seconds);
         }
-
-        BestSeconds[key] = seconds;
-        Save();
+        if (changed) Save();
     }
 
     public static void Clear()
@@ -102,6 +103,16 @@ public static class TaskTimeStore
         Load();
         BestSeconds.Clear();
         Save();
+    }
+
+    private static bool TrySetBest(ulong key, float seconds)
+    {
+        if (BestSeconds.TryGetValue(key, out var existing))
+        {
+            if (seconds >= existing) return false;
+        }
+        BestSeconds[key] = seconds;
+        return true;
     }
 
     private static void Save()

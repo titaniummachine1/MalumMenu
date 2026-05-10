@@ -643,13 +643,18 @@ public class TaskAutomationController : MonoBehaviour
 
         var duration = MalumMenu.autoTaskDefaultSeconds.Value;
 
-        if (CheatToggles.autoTaskUseBestTime && TaskTimeStore.TryGetBest(_mapId, _taskId, _taskType, out var best))
+        var hasBest = TaskTimeStore.TryGetBest(_mapId, _taskId, _taskType, out var best);
+        if (CheatToggles.autoTaskUseBestTime && hasBest)
         {
             duration = best;
             if (CheatToggles.debugTaskAutomation)
             {
                 MalumMenu.Log.LogInfo($"TaskAutomation: using best time={best:0.00}s map={_mapId} taskId={_taskId} taskType={_taskType}");
             }
+        }
+        else if (CheatToggles.debugTaskAutomation && hasBest)
+        {
+            MalumMenu.Log.LogInfo($"TaskAutomation: best time available but disabled best={best:0.00}s map={_mapId} taskId={_taskId} taskType={_taskType}");
         }
 
         if (duration < 0.1f) duration = 0.1f;
