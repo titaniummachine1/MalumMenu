@@ -570,6 +570,7 @@ public sealed class Radar : MonoBehaviour
             _lastShip = ship;
             ClearBodies();
             ClearPlayers();
+            ClearTrails();
         }
 
         var meeting = Utils.isMeeting;
@@ -1711,17 +1712,9 @@ public sealed class Radar : MonoBehaviour
         if (_trailsRoot == null) return;
 
         var meeting = _wasMeeting;
-        if (!CheatToggles.mapTrails || !Utils.isShip || ShipStatus.Instance == null)
+        if (!CheatToggles.mapTrails || !Utils.isInGame || !Utils.isShip || ShipStatus.Instance == null)
         {
-            foreach (var kvp in _uiByPlayer)
-            {
-                var ui = kvp.Value;
-                if (ui == null || ui.trail == null) continue;
-                ui.trail.start = 0;
-                ui.trail.count = 0;
-                ui.trail.hasHeadPoint = false;
-                HideAllSegments(ui.trail);
-            }
+            ClearTrails();
             return;
         }
 
@@ -1949,6 +1942,23 @@ public sealed class Radar : MonoBehaviour
         for (var i = 0; i < trail.segments.Count; i++)
         {
             if (trail.segments[i] != null) trail.segments[i].enabled = false;
+        }
+    }
+
+    private void ClearTrails()
+    {
+        foreach (var kvp in _uiByPlayer)
+        {
+            var ui = kvp.Value;
+            if (ui == null || ui.trail == null) continue;
+
+            ui.trail.start = 0;
+            ui.trail.count = 0;
+            ui.trail.nextRecordTime = 0f;
+            ui.trail.hasHeadPoint = false;
+
+            HideAllSegments(ui.trail);
+            DisableBigMapTrail(ui.trail);
         }
     }
 
