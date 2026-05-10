@@ -275,20 +275,17 @@ public static class Utils
         return 10 + num;
     }
 
-    // Overloads target with set strength using malformed RPCs
+    // Overloads target with set strength using Pet RPCs that
+    // repeatedly restart the hand-petting animation, preventing old petting coroutines
+    // from resolving
     public static void Overload(int targetId, int strength)
     {
         if (strength < 1) return;
 
         int maxRpc = GetMaxRpcPackingLimit();
 
-        // ClimbLadder RPC is only effective in maps with no ladders or in lobby
-        // SetStartCounter RPC is only effective when NOT in lobby
-
-        bool hasLadders = isShip && (isFungleMap || isAirshipMap);
-
-        uint netId = hasLadders ? PlayerControl.LocalPlayer.NetId : PlayerControl.LocalPlayer.MyPhysics.NetId;
-        byte rpcCall = hasLadders ? (byte)RpcCalls.SetStartCounter : (byte)RpcCalls.ClimbLadder;
+        uint netId = PlayerControl.LocalPlayer.MyPhysics.NetId;
+        byte rpcCall = (byte)RpcCalls.Pet;
 
         if (strength <= maxRpc)
         {
@@ -311,8 +308,23 @@ public static class Utils
             for (var msg = 0; msg < strength; msg++)
             {
                 messageWriter.StartMessage((byte)GameDataTypes.RpcFlag);
+
                 messageWriter.WritePacked(netId);
+
                 messageWriter.Write(rpcCall);
+
+                // Use LocalPlayer.GetTruePosition() as the petting position
+                // to minimize WalkPlayerTo delay and start the hand-petting animation immediately
+
+                NetHelpers.WriteVector2(PlayerControl.LocalPlayer.GetTruePosition(), messageWriter);
+
+                // Pet position is decoded as (-50, -50) on target clients
+                // This keeps the hand-petting animation out of normal view
+
+                messageWriter.Write((ushort)0);
+
+		        messageWriter.Write((ushort)0);
+
                 messageWriter.EndMessage();
             }
 
