@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System;
 using UnityEngine;
 using UnityEngine.UI;
+using Object = UnityEngine.Object;
 
 namespace MalumMenu;
 
@@ -68,8 +70,17 @@ public sealed class Radar : MonoBehaviour
         var map = MapBehaviour.Instance;
         if (map != null && map.gameObject != null && map.gameObject.activeInHierarchy)
         {
+            EnsureUi();
             SetVisible(false);
             _dragging = false;
+
+            if (Time.unscaledTime >= _nextTemplateScanTime)
+            {
+                _nextTemplateScanTime = Time.unscaledTime + 1f;
+                RefreshTemplate();
+            }
+
+            UpdateBackground();
             return;
         }
 
@@ -253,11 +264,7 @@ public sealed class Radar : MonoBehaviour
         var template = MapBehaviour.Instance;
         if (template == null)
         {
-            try { template = Object.FindObjectOfType<MapBehaviour>(true); } catch { template = null; }
-        }
-
-        if (template == null)
-        {
+            if (_template != null) return;
             _template = null;
             _mapSpace = null;
             _bgRenderer = null;
@@ -276,11 +283,8 @@ public sealed class Radar : MonoBehaviour
         _mapSpace = template.HerePoint != null ? template.HerePoint.transform.parent : null;
         if (_mapSpace == null) _mapSpace = template.transform;
 
-        var sr = ResolveBackgroundRenderer(template, _mapSpace);
-        if (sr == null)
-        {
-            sr = ResolveBackgroundRenderer(template, null);
-        }
+        var sr = ResolveBackgroundRenderer(template, null);
+        if (sr == null) sr = ResolveBackgroundRenderer(template, _mapSpace);
         if (sr == null || sr.sprite == null || sr.sprite.texture == null)
         {
             _bgRenderer = null;
@@ -314,7 +318,9 @@ public sealed class Radar : MonoBehaviour
             try
             {
                 var iconOk = _iconSprite != null;
-                MalumMenu.Log.LogInfo($"Radar: bg tex={texW}x{texH} uv=({_bgUv.x:0.000},{_bgUv.y:0.000},{_bgUv.width:0.000},{_bgUv.height:0.000}) boundsMin=({_bgBoundsMin.x:0.00},{_bgBoundsMin.y:0.00}) boundsSize=({_bgBoundsSize.x:0.00},{_bgBoundsSize.y:0.00}) aspect={_contentAspect:0.000} icon={iconOk}");
+                var bgGo = sr.gameObject != null ? sr.gameObject.name : "";
+                var bgSprite = sr.sprite != null ? sr.sprite.name : "";
+                MalumMenu.Log.LogInfo($"Radar: bg={bgGo}/{bgSprite} tex={texW}x{texH} uv=({_bgUv.x:0.000},{_bgUv.y:0.000},{_bgUv.width:0.000},{_bgUv.height:0.000}) boundsMin=({_bgBoundsMin.x:0.00},{_bgBoundsMin.y:0.00}) boundsSize=({_bgBoundsSize.x:0.00},{_bgBoundsSize.y:0.00}) aspect={_contentAspect:0.000} icon={iconOk}");
             }
             catch
             {
@@ -337,10 +343,25 @@ public sealed class Radar : MonoBehaviour
         }
         if (renderers == null) return null;
 
+        var bans = "";
+        try
+        {
+            if (MalumMenu.minimapBgBan != null) bans = MalumMenu.minimapBgBan.Value;
+        }
+        catch
+        {
+            bans = "";
+        }
+
         var here = template.HerePoint;
         var hereSprite = here != null ? here.sprite : null;
 
+        var debug = CheatToggles.debugMinimap && MalumMenu.Log != null;
+        List<(SpriteRenderer r, float worldArea, float pixelArea, int order, bool banned)> candidates = null;
+        if (debug) candidates = new List<(SpriteRenderer, float, float, int, bool)>(renderers.Length);
+
         SpriteRenderer best = null;
+        var bestPixelArea = 0f;
         var bestWorldArea = 0f;
         var bestOrder = int.MaxValue;
 
@@ -371,25 +392,96 @@ public sealed class Radar : MonoBehaviour
 
             if (worldArea <= 0.0001f) continue;
 
+            var tr = s.textureRect;
+            var pixelArea = tr.width * tr.height;
             var order = r.sortingOrder;
+
+            var spriteName = s != null ? s.name : "";
+            var banned = IsBannedByTokenList(bans, n) || IsBannedByTokenList(bans, spriteName);
+            if (debug) candidates.Add((r, worldArea, pixelArea, order, banned));
+            if (banned) continue;
+
             var better = false;
-            if (worldArea > bestWorldArea * 1.05f)
+            if (pixelArea > bestPixelArea * 1.05f)
             {
                 better = true;
             }
-            else if (worldArea >= bestWorldArea * 0.95f && order < bestOrder)
+            else if (pixelArea >= bestPixelArea * 0.95f)
             {
-                better = true;
+                if (worldArea > bestWorldArea * 1.05f)
+                {
+                    better = true;
+                }
+                else if (worldArea >= bestWorldArea * 0.95f && order < bestOrder)
+                {
+                    better = true;
+                }
             }
 
             if (!better) continue;
 
             best = r;
+            bestPixelArea = pixelArea;
             bestWorldArea = worldArea;
             bestOrder = order;
         }
 
+        if (debug && candidates != null && candidates.Count > 0)
+        {
+            try
+            {
+                candidates.Sort((a, b) =>
+                {
+                    var w = b.worldArea.CompareTo(a.worldArea);
+                    if (w != 0) return w;
+                    var p = b.pixelArea.CompareTo(a.pixelArea);
+                    if (p != 0) return p;
+                    return a.order.CompareTo(b.order);
+                });
+
+                var bestGo = best != null && best.gameObject != null ? best.gameObject.name : "";
+                var bestSprite = best != null && best.sprite != null ? best.sprite.name : "";
+                var banOk = string.IsNullOrWhiteSpace(bans) ? "(none)" : bans;
+
+                var topN = candidates.Count;
+                if (topN > 6) topN = 6;
+
+                var line = "RadarBG: ban=" + banOk + " top=";
+                for (var i = 0; i < topN; i++)
+                {
+                    var c = candidates[i];
+                    var go = c.r != null && c.r.gameObject != null ? c.r.gameObject.name : "";
+                    var sp = c.r != null && c.r.sprite != null ? c.r.sprite.name : "";
+                    line += "[" + i + "]" + go + "/" + sp + " o=" + c.order + " w=" + c.worldArea.ToString("0.###") + " px=" + c.pixelArea.ToString("0") + (c.banned ? " X " : "  ");
+                }
+
+                MalumMenu.Log.LogInfo("RadarBG: pick=" + bestGo + "/" + bestSprite);
+                MalumMenu.Log.LogInfo(line);
+            }
+            catch
+            {
+            }
+        }
+
         return best;
+    }
+
+    private static bool IsBannedByTokenList(string tokens, string name)
+    {
+        if (string.IsNullOrWhiteSpace(tokens)) return false;
+        if (string.IsNullOrEmpty(name)) return false;
+
+        var ln = name.ToLowerInvariant();
+        var parts = tokens.Split(new[] { ',', ';', '|', '\n', '\r', '\t', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var p = parts[i];
+            if (string.IsNullOrWhiteSpace(p)) continue;
+            var t = p.Trim().ToLowerInvariant();
+            if (t.Length == 0) continue;
+            if (ln.Contains(t)) return true;
+        }
+        return false;
     }
 
     private void UpdateBackground()
