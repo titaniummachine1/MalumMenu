@@ -177,6 +177,7 @@ public struct CheatToggles
     public static bool autoTaskShowProgress = true;
     public static bool recordTaskTimes;
     public static bool debugTaskAutomation;
+    public static bool minimapHideDuringMeeting = true;
 
     // Modes
     public static bool rgbMode;

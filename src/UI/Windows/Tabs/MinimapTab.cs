@@ -31,6 +31,7 @@ public class MinimapTab : ITab
 
             GUILayout.Label(" Drag the minimap to move it (while menu is open).");
             GUILayout.Label(" Open the in-game map once per match so the minimap background can initialize.");
+            CheatToggles.minimapHideDuringMeeting = GUILayout.Toggle(CheatToggles.minimapHideDuringMeeting, " Hide During Meeting");
             CheatToggles.debugMinimap = GUILayout.Toggle(CheatToggles.debugMinimap, " Debug Minimap (Log)");
         }
 

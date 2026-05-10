@@ -25,6 +25,7 @@ public sealed class Radar : MonoBehaviour
     private const int TrailMaxSegments = 128;
     private const float TrailAlphaStart = 0.85f;
     private const float TrailAlphaEnd = 0.60f;
+    private const int MeetingFreezeStepsBack = 1;
 
     private static Sprite _fallbackSprite;
     private static Sprite _radialSprite;
@@ -60,6 +61,7 @@ public sealed class Radar : MonoBehaviour
 
     private MapBehaviour _template;
     private Transform _mapSpace;
+    private SpriteRenderer _hereRenderer;
     private SpriteRenderer _bgRenderer;
     private Texture _bgTex;
     private Rect _bgUv;
@@ -70,6 +72,7 @@ public sealed class Radar : MonoBehaviour
     private Material _iconBaseMaterial;
     private float _contentAspect = 1f;
     private bool _wasMeeting;
+    private bool _wasMapOpen;
     private float _meetingFreezeNow;
     private float _nextBodyScanTime;
     private bool _freezePlayersForMeeting;
@@ -78,9 +81,46 @@ public sealed class Radar : MonoBehaviour
     private Transform _mapOverlayRoot;
 
     private const float BigMapBodySize = 0.28f;
-    private const float BigMapTrailWidth = 0.05f;
+    private const float BigMapTrailWidth = 0.006f;
     private const float BigMapDotSize = 0.24f;
     private const float BigMapHaloSize = 0.34f;
+
+    private void GetBigMapIconScales(out float dotSize, out float haloSize, out float bodySize, out float trailWidth)
+    {
+        dotSize = BigMapDotSize;
+        haloSize = BigMapHaloSize;
+        bodySize = BigMapBodySize;
+        trailWidth = BigMapTrailWidth;
+
+        if (_hereRenderer == null) return;
+
+        try
+        {
+            var s = _hereRenderer.transform.localScale;
+            var baseS = Mathf.Max(Mathf.Abs(s.x), Mathf.Abs(s.y));
+            if (baseS <= 0.0001f) return;
+
+            dotSize = baseS;
+            haloSize = baseS * 1.35f;
+            bodySize = baseS * 1.15f;
+        }
+        catch
+        {
+        }
+    }
+
+    private static bool TryWorldToMapLocal(Vector3 worldPos, out Vector2 mapLocal)
+    {
+        mapLocal = default;
+
+        if (!Utils.isShip || ShipStatus.Instance == null) return false;
+
+        var pos = worldPos;
+        pos /= ShipStatus.Instance.MapScale;
+        pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
+        mapLocal = new Vector2(pos.x, pos.y);
+        return true;
+    }
 
     private void CacheAllPlayerMapLocal()
     {
@@ -96,10 +136,8 @@ public sealed class Radar : MonoBehaviour
             if (p.Data == null) continue;
 
             var id = p.PlayerId;
-            var pos = p.transform.position;
-            pos /= ShipStatus.Instance.MapScale;
-            pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
-            _playerMapLocalById[id] = new Vector2(pos.x, pos.y);
+            if (!TryWorldToMapLocal(p.transform.position, out var mapLocal)) continue;
+            _playerMapLocalById[id] = mapLocal;
         }
     }
 
@@ -127,6 +165,18 @@ public sealed class Radar : MonoBehaviour
     private void ApplyBigMapSorting(SpriteRenderer sr, int extraOrder)
     {
         if (sr == null) return;
+        if (_hereRenderer != null)
+        {
+            try
+            {
+                sr.sortingLayerID = _hereRenderer.sortingLayerID;
+                sr.sortingOrder = _hereRenderer.sortingOrder + extraOrder;
+                return;
+            }
+            catch
+            {
+            }
+        }
         if (_bgRenderer != null)
         {
             try
@@ -147,7 +197,6 @@ public sealed class Radar : MonoBehaviour
         if (_mapSpace == null) return;
         EnsureBigMapOverlay();
         SetBigMapOverlayVisible(true);
-
         UpdateBigMapPlayers();
         UpdateBigMapBodies();
         UpdateBigMapTrails();
@@ -156,6 +205,8 @@ public sealed class Radar : MonoBehaviour
     private void UpdateBigMapPlayers()
     {
         if (_mapOverlayRoot == null) return;
+
+        GetBigMapIconScales(out var dotSize, out var haloSize, out _, out _);
 
         var players = PlayerControl.AllPlayerControls;
         if (players == null)
@@ -203,16 +254,18 @@ public sealed class Radar : MonoBehaviour
             }
             else
             {
-                var pos = p.transform.position;
-                pos /= ShipStatus.Instance.MapScale;
-                pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
-                mapLocal = new Vector2(pos.x, pos.y);
+                if (!TryWorldToMapLocal(p.transform.position, out mapLocal))
+                {
+                    DisableMapPlayer(id);
+                    continue;
+                }
                 _playerMapLocalById[id] = mapLocal;
             }
 
             var dot = GetOrCreateMapDot(id);
             dot.transform.localPosition = new Vector3(mapLocal.x, mapLocal.y, 0f);
-            dot.transform.localScale = new Vector3(BigMapDotSize, BigMapDotSize, 1f);
+            dot.transform.localScale = new Vector3(dotSize, dotSize, 1f);
+            if (_iconSprite != null && dot.sprite != _iconSprite) dot.sprite = _iconSprite;
             ApplyMapDotColor(dot, p, isImp, isDead);
             dot.enabled = true;
 
@@ -222,7 +275,7 @@ public sealed class Radar : MonoBehaviour
             if (showHalo)
             {
                 halo.transform.localPosition = new Vector3(mapLocal.x, mapLocal.y, 0f);
-                halo.transform.localScale = new Vector3(BigMapHaloSize, BigMapHaloSize, 1f);
+                halo.transform.localScale = new Vector3(haloSize, haloSize, 1f);
                 halo.color = new Color(1f, 0f, 0f, 0.60f);
             }
         }
@@ -329,6 +382,8 @@ public sealed class Radar : MonoBehaviour
     {
         if (_mapOverlayRoot == null) return;
 
+        GetBigMapIconScales(out _, out _, out var bodySize, out _);
+
         var source = _freezeBodiesForMeeting ? _frozenBodyMapLocalById : _bodyMapLocalById;
 
         _tmpRemoveBodies.Clear();
@@ -357,7 +412,7 @@ public sealed class Radar : MonoBehaviour
 
             var p = kvp.Value;
             sr.transform.localPosition = new Vector3(p.x, p.y, 0f);
-            sr.transform.localScale = new Vector3(BigMapBodySize, BigMapBodySize, 1f);
+            sr.transform.localScale = new Vector3(bodySize, bodySize, 1f);
             sr.color = new Color(0f, 1f, 0f, 0.85f);
             sr.enabled = true;
         }
@@ -458,6 +513,8 @@ public sealed class Radar : MonoBehaviour
     {
         if (trail == null || trail.mapSegments == null) return;
 
+        GetBigMapIconScales(out _, out _, out _, out var trailWidth);
+
         var count = trail.count;
         if (count <= 0)
         {
@@ -533,9 +590,21 @@ public sealed class Radar : MonoBehaviour
             var t = keepSeconds > 0.001f ? Mathf.Clamp01(age / keepSeconds) : 1f;
             var alpha = Mathf.Lerp(TrailAlphaStart, TrailAlphaEnd, t);
 
+            var invParentScaleY = 1f;
+            try
+            {
+                var ls = _mapOverlayRoot != null ? _mapOverlayRoot.lossyScale : Vector3.one;
+                var absY = Mathf.Abs(ls.y);
+                if (absY > 0.0001f) invParentScaleY = 1f / absY;
+            }
+            catch
+            {
+                invParentScaleY = 1f;
+            }
+
             sr.transform.localPosition = new Vector3(mid.x, mid.y, 0f);
             sr.transform.localRotation = Quaternion.Euler(0f, 0f, angle);
-            sr.transform.localScale = new Vector3(len, BigMapTrailWidth, 1f);
+            sr.transform.localScale = new Vector3(len, trailWidth * invParentScaleY, 1f);
             sr.color = new Color(trail.color.r, trail.color.g, trail.color.b, alpha);
             sr.enabled = true;
 
@@ -555,6 +624,36 @@ public sealed class Radar : MonoBehaviour
 
         var map = MapBehaviour.Instance;
         var mapOpen = map != null && map.gameObject != null && map.gameObject.activeInHierarchy;
+        if (mapOpen && !_wasMapOpen)
+        {
+            _wasMapOpen = true;
+            if (CheatToggles.debugMinimap && MalumMenu.Log != null)
+            {
+                try
+                {
+                    RefreshTemplate();
+                    var layer = _hereRenderer != null ? _hereRenderer.sortingLayerID : (_bgRenderer != null ? _bgRenderer.sortingLayerID : 0);
+                    var order = _hereRenderer != null ? _hereRenderer.sortingOrder : (_bgRenderer != null ? _bgRenderer.sortingOrder : 0);
+                    var mapSpaceName = _mapSpace != null ? _mapSpace.name : "";
+                    MalumMenu.Log.LogInfo($"RadarMapOverlay: opened mapSpace={mapSpaceName} layer={layer} orderBase={order}");
+                }
+                catch
+                {
+                }
+            }
+        }
+        else if (!mapOpen && _wasMapOpen)
+        {
+            _wasMapOpen = false;
+        }
+
+        if (!Utils.isInGame && !mapOpen)
+        {
+            SetVisible(false);
+            SetBigMapOverlayVisible(false);
+            _dragging = false;
+            return;
+        }
 
         if (!CheatToggles.minimapAlwaysOn && !mapOpen)
         {
@@ -574,6 +673,10 @@ public sealed class Radar : MonoBehaviour
         }
 
         var meeting = Utils.isMeeting;
+        if (meeting && CheatToggles.minimapHideDuringMeeting)
+        {
+            SetVisible(false);
+        }
         if (!meeting)
         {
             CacheAllPlayerMapLocal();
@@ -621,6 +724,12 @@ public sealed class Radar : MonoBehaviour
 
         EnsureUi();
         SetBigMapOverlayVisible(false);
+        if (meeting && CheatToggles.minimapHideDuringMeeting)
+        {
+            SetVisible(false);
+            _dragging = false;
+            return;
+        }
         SetVisible(true);
 
         var s = Mathf.Clamp(scale, MinScale, MaxScale);
@@ -814,6 +923,7 @@ public sealed class Radar : MonoBehaviour
             if (_template != null) return;
             _template = null;
             _mapSpace = null;
+            _hereRenderer = null;
             _bgRenderer = null;
             _bgTex = null;
             _bgUv = default;
@@ -824,10 +934,15 @@ public sealed class Radar : MonoBehaviour
             return;
         }
 
-        if (_template == template) return;
+        if (_template == template)
+        {
+            var ok = _mapSpace != null && _bgRenderer != null && _bgRenderer.sprite != null && _bgRenderer.sprite.texture != null;
+            if (ok) return;
+        }
         _template = template;
 
-        _mapSpace = template.HerePoint != null ? template.HerePoint.transform.parent : null;
+        _hereRenderer = template.HerePoint != null ? template.HerePoint : null;
+        _mapSpace = _hereRenderer != null ? _hereRenderer.transform.parent : null;
         if (_mapSpace == null) _mapSpace = template.transform;
 
         var sr = ResolveBackgroundRenderer(template, null);
@@ -858,8 +973,8 @@ public sealed class Radar : MonoBehaviour
         _bgBoundsSize = b.size;
         _contentAspect = tr.height > 0.0001f ? (tr.width / tr.height) : 1f;
 
-        _iconSprite = template.HerePoint != null ? template.HerePoint.sprite : null;
-        _iconBaseMaterial = template.HerePoint != null ? template.HerePoint.sharedMaterial : null;
+        _iconSprite = _hereRenderer != null ? _hereRenderer.sprite : null;
+        _iconBaseMaterial = _hereRenderer != null ? _hereRenderer.sharedMaterial : null;
 
         if (CheatToggles.debugMinimap && MalumMenu.Log != null)
         {
@@ -1351,10 +1466,12 @@ public sealed class Radar : MonoBehaviour
         }
         else
         {
-            var pos = p.transform.position;
-            pos /= ShipStatus.Instance.MapScale;
-            pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
-            mapLocal = new Vector2(pos.x, pos.y);
+            if (!TryWorldToMapLocal(p.transform.position, out mapLocal))
+            {
+                if (ui.dot != null) ui.dot.enabled = false;
+                if (ui.highlight != null) ui.highlight.enabled = false;
+                return;
+            }
             _playerMapLocalById[id] = mapLocal;
         }
 
@@ -1476,10 +1593,11 @@ public sealed class Radar : MonoBehaviour
                     _bodyUiById[id] = img;
                 }
 
-                var pos = b.transform.position;
-                pos /= ShipStatus.Instance.MapScale;
-                pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
-                var mapLocal = new Vector2(pos.x, pos.y);
+                if (!TryWorldToMapLocal(b.transform.position, out var mapLocal))
+                {
+                    img.enabled = false;
+                    continue;
+                }
                 _bodyMapLocalById[id] = mapLocal;
 
                 if (!TryMapLocalToAnchored(mapLocal, out var anchored))
@@ -1525,33 +1643,6 @@ public sealed class Radar : MonoBehaviour
     {
         _freezeBodiesForMeeting = true;
 
-        if (Utils.isShip && ShipStatus.Instance != null)
-        {
-            try
-            {
-                DeadBody[] bodies = null;
-                try { bodies = Object.FindObjectsOfType<DeadBody>(true); } catch { bodies = null; }
-                if (bodies != null)
-                {
-                    for (var i = 0; i < bodies.Length; i++)
-                    {
-                        var b = bodies[i];
-                        if (b == null) continue;
-                        if (b.gameObject == null) continue;
-
-                        var id = b.gameObject.GetInstanceID();
-                        var pos = b.transform.position;
-                        pos /= ShipStatus.Instance.MapScale;
-                        pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
-                        _bodyMapLocalById[id] = new Vector2(pos.x, pos.y);
-                    }
-                }
-            }
-            catch
-            {
-            }
-        }
-
         _frozenBodyMapLocalById.Clear();
         foreach (var kvp in _bodyMapLocalById)
         {
@@ -1559,14 +1650,56 @@ public sealed class Radar : MonoBehaviour
         }
     }
 
+    private static bool TryGetTrailPointStepsBack(RadarTrail trail, int stepsBack, out Vector2 mapLocal)
+    {
+        mapLocal = default;
+        if (trail == null) return false;
+        if (trail.count <= 0) return false;
+        if (stepsBack < 0) stepsBack = 0;
+
+        var newestIdx = (trail.start + trail.count - 1) % TrailMaxWaypoints;
+        var idx = newestIdx;
+        for (var i = 0; i < stepsBack; i++)
+        {
+            if (trail.count <= (i + 1)) break;
+            idx = (idx - 1 + TrailMaxWaypoints) % TrailMaxWaypoints;
+        }
+
+        mapLocal = trail.points[idx];
+        return true;
+    }
+
     private void SnapshotPlayersForMeeting()
     {
         _freezePlayersForMeeting = true;
 
         _frozenPlayerMapLocalById.Clear();
-        foreach (var kvp in _playerMapLocalById)
+        var players = PlayerControl.AllPlayerControls;
+        if (players != null)
         {
-            _frozenPlayerMapLocalById[kvp.Key] = kvp.Value;
+            for (var i = 0; i < players.Count; i++)
+            {
+                var p = players[i];
+                if (p == null || p.Data == null) continue;
+
+                var id = p.PlayerId;
+
+                Vector2 mapLocal;
+                if (_uiByPlayer.TryGetValue(id, out var ui) && ui != null && ui.trail != null &&
+                    TryGetTrailPointStepsBack(ui.trail, MeetingFreezeStepsBack, out mapLocal))
+                {
+                }
+                else if (_playerMapLocalById.TryGetValue(id, out var cached))
+                {
+                    mapLocal = cached;
+                }
+                else if (!TryWorldToMapLocal(p.transform.position, out mapLocal))
+                {
+                    continue;
+                }
+
+                _frozenPlayerMapLocalById[id] = mapLocal;
+            }
         }
 
         foreach (var kvp in _uiByPlayer)
@@ -1743,16 +1876,14 @@ public sealed class Radar : MonoBehaviour
                     else show = CheatToggles.mapCrew;
                     if (!show) continue;
 
-                    var pos = p.transform.position;
-                    pos /= ShipStatus.Instance.MapScale;
-                    pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
-                    ui.trail.headPoint = new Vector2(pos.x, pos.y);
+                    if (!TryWorldToMapLocal(p.transform.position, out var mapLocal)) continue;
+                    ui.trail.headPoint = mapLocal;
                     ui.trail.hasHeadPoint = true;
 
                     if (now < ui.trail.nextRecordTime) continue;
                     ui.trail.nextRecordTime = now + TrailWaypointIntervalSeconds;
 
-                    AddTrailPoint(ui.trail, new Vector2(pos.x, pos.y), now);
+                    AddTrailPoint(ui.trail, mapLocal, now);
                 }
             }
         }
