@@ -6,13 +6,16 @@ namespace MalumMenu;
 
 public class MenuUI : MonoBehaviour
 {
-    public static int windowHeight = 550;
-    public static int windowWidth = 700;
+    public static int windowHeight = 620;
+    public static int windowWidth = 760;
     private Rect _windowRect;
 
     public static bool isGUIActive = false;
     private List<ITab> _tabs = new();
     private int _selectedTab;
+    private int _lastSelectedTab = -1;
+    private Vector2 _tabListScroll;
+    private Vector2 _tabContentScroll;
     public static float hue; // For RGB mode
 
     private void Start()
@@ -111,7 +114,7 @@ public class MenuUI : MonoBehaviour
         }
 
         // Some cheats only work if the LocalPlayer exists, so they are turned off if it does not
-        if(!Utils.isPlayer)
+        if (!Utils.isPlayer)
         {
             CheatToggles.setFakeRole = false;
             CheatToggles.setFakeAlive = false;
@@ -133,7 +136,7 @@ public class MenuUI : MonoBehaviour
         }
 
         // Some cheats only work if the ship exists, so they are turned off if it does not
-        if(!Utils.isShip)
+        if (!Utils.isShip)
         {
             CheatToggles.sabotageMap = false;
             CheatToggles.unfixableLights = false;
@@ -155,7 +158,7 @@ public class MenuUI : MonoBehaviour
             MalumCheats.StopShipAnimCheats();
         }
 
-        if(!Utils.isHost && !Utils.isFreePlay)
+        if (!Utils.isHost && !Utils.isFreePlay)
         {
             CheatToggles.killAll = false;
             CheatToggles.telekillPlayer = false;
@@ -199,6 +202,7 @@ public class MenuUI : MonoBehaviour
 
         // Left tab selector (15% width)
         GUILayout.BeginVertical(GUILayout.Width(windowWidth * 0.15f));
+        _tabListScroll = GUILayout.BeginScrollView(_tabListScroll, false, true, GUILayout.ExpandHeight(true));
         for (var i = 0; i < _tabs.Count; i++)
         {
             Color standardColor = GUI.backgroundColor;
@@ -214,6 +218,7 @@ public class MenuUI : MonoBehaviour
             GUI.backgroundColor = standardColor;
 
         }
+        GUILayout.EndScrollView();
         GUILayout.EndVertical();
 
         // Vertical separator line + invisible space to create gap between the tab selector and the content
@@ -226,8 +231,16 @@ public class MenuUI : MonoBehaviour
         // Tab-specific content
         if (_selectedTab >= 0 && _selectedTab < _tabs.Count)
         {
+            if (_lastSelectedTab != _selectedTab)
+            {
+                _lastSelectedTab = _selectedTab;
+                _tabContentScroll = Vector2.zero;
+            }
+
             GUILayout.Label(_tabs[_selectedTab].name, GUIStylePreset.TabTitle);
+            _tabContentScroll = GUILayout.BeginScrollView(_tabContentScroll, false, true, GUILayout.ExpandHeight(true));
             _tabs[_selectedTab].Draw();
+            GUILayout.EndScrollView();
         }
 
         GUILayout.EndVertical();

@@ -174,6 +174,7 @@ public struct CheatToggles
     public static bool showTasksMenu;
     public static bool autoTaskOnOpen;
     public static bool autoTaskUseBestTime;
+    public static bool autoTaskShowProgress = true;
     public static bool recordTaskTimes;
     public static bool debugTaskAutomation;
 

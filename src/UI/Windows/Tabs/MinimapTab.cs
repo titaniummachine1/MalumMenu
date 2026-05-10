@@ -17,20 +17,21 @@ public class MinimapTab : ITab
             GUILayout.Label($" Scale: {scale:0.00}");
             Radar.scale = GUILayout.HorizontalSlider(scale, 0.15f, 0.75f);
 
-            GUILayout.Label(" Drag the minimap to move it (while menu is open).");
-            CheatToggles.debugMinimap = GUILayout.Toggle(CheatToggles.debugMinimap, " Debug Minimap (Log)");
-            if (CheatToggles.debugMinimap)
+            if (MalumMenu.minimapIconScale != null)
             {
-                var off = Radar.mapOffset;
-                GUILayout.Label($" Map Offset X: {off.x:0.00}");
-                var ox = GUILayout.HorizontalSlider(off.x, -5f, 5f);
-                GUILayout.Label($" Map Offset Y: {off.y:0.00}");
-                var oy = GUILayout.HorizontalSlider(off.y, -5f, 5f);
-                if (Mathf.Abs(ox - off.x) > 0.0001f || Mathf.Abs(oy - off.y) > 0.0001f)
+                var iconScale = MalumMenu.minimapIconScale.Value;
+                GUILayout.Label($" Icon Scale: {iconScale:0.00}");
+                var newIconScale = GUILayout.HorizontalSlider(iconScale, 0.50f, 2.50f);
+                if (Mathf.Abs(newIconScale - iconScale) > 0.0001f)
                 {
-                    Radar.mapOffset = new Vector2(ox, oy);
+                    MalumMenu.minimapIconScale.Value = newIconScale;
+                    if (MalumMenu.Plugin != null) MalumMenu.Plugin.Config.Save();
                 }
             }
+
+            GUILayout.Label(" Drag the minimap to move it (while menu is open).");
+            GUILayout.Label(" Open the in-game map once per match so the minimap background can initialize.");
+            CheatToggles.debugMinimap = GUILayout.Toggle(CheatToggles.debugMinimap, " Debug Minimap (Log)");
         }
 
         GUILayout.Space(10);

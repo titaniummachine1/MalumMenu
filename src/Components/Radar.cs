@@ -10,7 +10,6 @@ public sealed class Radar : MonoBehaviour
 {
     public static float scale = 0.35f;
     public static Vector2 anchoredPosition = new Vector2(320f, 180f);
-    public static Vector2 mapOffset = Vector2.zero;
 
     private const float MinScale = 0.15f;
     private const float MaxScale = 0.75f;
@@ -18,6 +17,8 @@ public sealed class Radar : MonoBehaviour
     private const float DefaultScale = 0.35f;
     private const float IconSize = 14f;
     private const float HighlightSize = 18f;
+    private const float BodySize = 16f;
+    private const float HaloSizeMult = 2.0f;
     private const float TrailWidth = 2f;
     private const int TrailMaxWaypoints = 256;
     private const float TrailWaypointIntervalSeconds = 0.25f;
@@ -26,9 +27,14 @@ public sealed class Radar : MonoBehaviour
     private const float TrailAlphaEnd = 0.60f;
 
     private static Sprite _fallbackSprite;
+    private static Sprite _radialSprite;
 
     private readonly Dictionary<byte, RadarPlayerUi> _uiByPlayer = new Dictionary<byte, RadarPlayerUi>(16);
     private readonly List<byte> _tmpRemove = new List<byte>(16);
+    private readonly Dictionary<int, Image> _bodyUiById = new Dictionary<int, Image>(16);
+    private readonly List<int> _tmpRemoveBodies = new List<int>(16);
+    private readonly Dictionary<int, Vector2> _bodyMapLocalById = new Dictionary<int, Vector2>(16);
+    private readonly Dictionary<int, Vector2> _frozenBodyMapLocalById = new Dictionary<int, Vector2>(16);
 
     private Canvas _canvas;
     private CanvasScaler _scaler;
@@ -38,6 +44,7 @@ public sealed class Radar : MonoBehaviour
     private RectTransform _iconsRoot;
     private RectTransform _trailsRoot;
     private RectTransform _borderRoot;
+    private RectTransform _bodiesRoot;
 
     private bool _dragging;
     private Vector2 _dragStartMouse;
@@ -45,7 +52,6 @@ public sealed class Radar : MonoBehaviour
     private float _nextSaveTime;
     private Vector2 _lastSavedAnchored;
     private float _lastSavedScale;
-    private Vector2 _lastSavedMapOffset;
 
     private MapBehaviour _template;
     private Transform _mapSpace;
@@ -56,7 +62,13 @@ public sealed class Radar : MonoBehaviour
     private Vector2 _bgBoundsSize;
     private float _nextTemplateScanTime;
     private Sprite _iconSprite;
+    private Material _iconBaseMaterial;
     private float _contentAspect = 1f;
+    private bool _wasMeeting;
+    private float _meetingFreezeNow;
+    private float _nextBodyScanTime;
+    private bool _freezeBodiesForMeeting;
+    private ShipStatus _lastShip;
 
     private void Update()
     {
@@ -65,6 +77,27 @@ public sealed class Radar : MonoBehaviour
             SetVisible(false);
             _dragging = false;
             return;
+        }
+
+        var ship = ShipStatus.Instance;
+        if (!ReferenceEquals(ship, _lastShip))
+        {
+            _lastShip = ship;
+            ClearBodies();
+        }
+
+        var meeting = Utils.isMeeting;
+        if (meeting && !_wasMeeting)
+        {
+            _wasMeeting = true;
+            _meetingFreezeNow = Time.time;
+            SnapshotBodiesForMeeting();
+        }
+        else if (!meeting && _wasMeeting)
+        {
+            _wasMeeting = false;
+            _freezeBodiesForMeeting = false;
+            _frozenBodyMapLocalById.Clear();
         }
 
         var map = MapBehaviour.Instance;
@@ -115,6 +148,7 @@ public sealed class Radar : MonoBehaviour
 
         UpdateBackground();
         UpdatePlayers();
+        UpdateBodies();
         UpdateTrails();
         MaybeSaveWindow();
     }
@@ -195,6 +229,16 @@ public sealed class Radar : MonoBehaviour
 
         _trailsRoot.SetSiblingIndex(1);
         _iconsRoot.SetSiblingIndex(2);
+
+        var bodiesGo = new GameObject("Bodies");
+        _bodiesRoot = bodiesGo.AddComponent<RectTransform>();
+        _bodiesRoot.SetParent(_contentRoot, false);
+        _bodiesRoot.anchorMin = Vector2.zero;
+        _bodiesRoot.anchorMax = Vector2.one;
+        _bodiesRoot.pivot = new Vector2(0.5f, 0.5f);
+        _bodiesRoot.anchoredPosition = Vector2.zero;
+        _bodiesRoot.sizeDelta = Vector2.zero;
+        _bodiesRoot.SetSiblingIndex(3);
     }
 
     private void SetVisible(bool visible)
@@ -312,6 +356,7 @@ public sealed class Radar : MonoBehaviour
         _contentAspect = tr.height > 0.0001f ? (tr.width / tr.height) : 1f;
 
         _iconSprite = template.HerePoint != null ? template.HerePoint.sprite : null;
+        _iconBaseMaterial = template.HerePoint != null ? template.HerePoint.sharedMaterial : null;
 
         if (CheatToggles.debugMinimap && MalumMenu.Log != null)
         {
@@ -535,6 +580,37 @@ public sealed class Radar : MonoBehaviour
         return _fallbackSprite;
     }
 
+    private static Sprite GetRadialSprite()
+    {
+        if (_radialSprite != null) return _radialSprite;
+
+        var tex = new Texture2D(64, 64, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        tex.filterMode = FilterMode.Bilinear;
+
+        var cx = 31.5f;
+        var cy = 31.5f;
+        var r0 = 10f;
+        var r1 = 31.5f;
+
+        for (var y = 0; y < 64; y++)
+        {
+            for (var x = 0; x < 64; x++)
+            {
+                var dx = x - cx;
+                var dy = y - cy;
+                var d = Mathf.Sqrt((dx * dx) + (dy * dy));
+                var t = Mathf.InverseLerp(r0, r1, d);
+                var a = 1f - Mathf.Clamp01(t);
+                a *= a;
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+            }
+        }
+        tex.Apply(false, true);
+        _radialSprite = Sprite.Create(tex, new Rect(0f, 0f, 64f, 64f), new Vector2(0.5f, 0.5f), 64f);
+        return _radialSprite;
+    }
+
     private bool TryMapLocalToAnchored(Vector2 mapLocal, out Vector2 anchored)
     {
         anchored = default;
@@ -548,9 +624,6 @@ public sealed class Radar : MonoBehaviour
 
         var world = _mapSpace.TransformPoint(new Vector3(mapLocal.x, mapLocal.y, 0f));
         var bgLocal = _bgRenderer.transform.InverseTransformPoint(world);
-
-        bgLocal.x += mapOffset.x;
-        bgLocal.y += mapOffset.y;
 
         var u = (bgLocal.x - _bgBoundsMin.x) / bsize.x;
         var v = (bgLocal.y - _bgBoundsMin.y) / bsize.y;
@@ -621,7 +694,7 @@ public sealed class Radar : MonoBehaviour
         ui.id = id;
         ui.trail = new RadarTrail(TrailMaxWaypoints);
 
-        ui.highlight = CreateIcon(_iconsRoot, "Highlight", HighlightSize);
+        ui.highlight = CreateHalo(_iconsRoot, "Halo", HighlightSize);
         ui.dot = CreateIcon(_iconsRoot, "Dot", IconSize);
 
         ui.highlight.enabled = false;
@@ -643,6 +716,24 @@ public sealed class Radar : MonoBehaviour
 
         var img = go.AddComponent<Image>();
         img.sprite = _iconSprite != null ? _iconSprite : GetFallbackSprite();
+        img.preserveAspect = true;
+        img.raycastTarget = false;
+        return img;
+    }
+
+    private static Image CreateHalo(RectTransform parent, string name, float size)
+    {
+        var go = new GameObject(name);
+        var rt = go.AddComponent<RectTransform>();
+        rt.SetParent(parent, false);
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(size, size);
+        rt.anchoredPosition = Vector2.zero;
+
+        var img = go.AddComponent<Image>();
+        img.sprite = GetRadialSprite();
         img.preserveAspect = true;
         img.raycastTarget = false;
         return img;
@@ -697,7 +788,49 @@ public sealed class Radar : MonoBehaviour
         if (_iconSprite != null)
         {
             if (ui.dot != null && ui.dot.sprite != _iconSprite) ui.dot.sprite = _iconSprite;
-            if (ui.highlight != null && ui.highlight.sprite != _iconSprite) ui.highlight.sprite = _iconSprite;
+        }
+
+        if (_iconBaseMaterial != null && ui.dot != null)
+        {
+            try
+            {
+                var m = ui.dot.material;
+                if (m == null || m.shader != _iconBaseMaterial.shader)
+                {
+                    ui.dot.material = new Material(_iconBaseMaterial);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        var s = Mathf.Clamp(scale, MinScale, MaxScale);
+        var iconScale = 1f;
+        try
+        {
+            if (MalumMenu.minimapIconScale != null) iconScale = MalumMenu.minimapIconScale.Value;
+        }
+        catch
+        {
+            iconScale = 1f;
+        }
+        if (iconScale < 0.50f) iconScale = 0.50f;
+        if (iconScale > 2.50f) iconScale = 2.50f;
+
+        var scaleMul = (s / DefaultScale) * iconScale;
+        var dotSize = IconSize * scaleMul;
+        var haloSize = HighlightSize * scaleMul * HaloSizeMult;
+
+        if (ui.dot != null && Mathf.Abs(ui.lastDotSize - dotSize) > 0.01f)
+        {
+            ui.dot.rectTransform.sizeDelta = new Vector2(dotSize, dotSize);
+            ui.lastDotSize = dotSize;
+        }
+        if (ui.highlight != null && Mathf.Abs(ui.lastHighlightSize - haloSize) > 0.01f)
+        {
+            ui.highlight.rectTransform.sizeDelta = new Vector2(haloSize, haloSize);
+            ui.lastHighlightSize = haloSize;
         }
 
         var pos = p.transform.position;
@@ -717,7 +850,7 @@ public sealed class Radar : MonoBehaviour
         {
             ui.dot.enabled = true;
             ui.dot.rectTransform.anchoredPosition = anchored;
-            ui.dot.color = color;
+            ApplyPlayerIconColors(ui.dot, color, isImp, isDead);
         }
 
         if (ui.highlight != null)
@@ -727,7 +860,7 @@ public sealed class Radar : MonoBehaviour
             if (highlight)
             {
                 ui.highlight.rectTransform.anchoredPosition = anchored;
-                ui.highlight.color = new Color(1f, 0f, 0f, 0.75f);
+                ui.highlight.color = new Color(1f, 0f, 0f, 0.60f);
             }
         }
 
@@ -751,6 +884,235 @@ public sealed class Radar : MonoBehaviour
         if (p.Data.Role != null) return p.Data.Role.TeamColor;
         if (isImp) return Color.red;
         return Color.cyan;
+    }
+
+    private static void ApplyPlayerIconColors(Image img, Color color, bool isImp, bool isDead)
+    {
+        if (img == null) return;
+
+        var mat = img.material;
+        if (mat != null)
+        {
+            try
+            {
+                mat.SetColor(PlayerMaterial.BackColor, color);
+                mat.SetColor(PlayerMaterial.BodyColor, color);
+                mat.SetColor(PlayerMaterial.VisorColor, Palette.VisorColor);
+                img.color = Color.white;
+                return;
+            }
+            catch
+            {
+            }
+        }
+
+        img.color = color;
+    }
+
+    private void UpdateBodies()
+    {
+        if (_bodiesRoot == null) return;
+        if (!CheatToggles.minimapAlwaysOn) return;
+        if (!Utils.isShip || ShipStatus.Instance == null) return;
+
+        if (_freezeBodiesForMeeting)
+        {
+            UpdateBodiesFrozen();
+            return;
+        }
+
+        if (Time.unscaledTime < _nextBodyScanTime) return;
+        _nextBodyScanTime = Time.unscaledTime + 0.5f;
+
+        _tmpRemoveBodies.Clear();
+        foreach (var kvp in _bodyUiById)
+        {
+            _tmpRemoveBodies.Add(kvp.Key);
+        }
+
+        DeadBody[] bodies = null;
+        try { bodies = Object.FindObjectsOfType<DeadBody>(true); } catch { bodies = null; }
+        if (bodies != null)
+        {
+            for (var i = 0; i < bodies.Length; i++)
+            {
+                var b = bodies[i];
+                if (b == null) continue;
+                if (b.gameObject == null) continue;
+                if (!b.gameObject.activeInHierarchy) continue;
+
+                var id = b.gameObject.GetInstanceID();
+                RemoveTmpBody(id);
+
+                if (!_bodyUiById.TryGetValue(id, out var img) || img == null)
+                {
+                    img = CreateHalo(_bodiesRoot, "Body", BodySize);
+                    _bodyUiById[id] = img;
+                }
+
+                var pos = b.transform.position;
+                pos /= ShipStatus.Instance.MapScale;
+                pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
+                var mapLocal = new Vector2(pos.x, pos.y);
+                _bodyMapLocalById[id] = mapLocal;
+
+                if (!TryMapLocalToAnchored(mapLocal, out var anchored))
+                {
+                    img.enabled = false;
+                    continue;
+                }
+
+                var s = Mathf.Clamp(scale, MinScale, MaxScale);
+                var iconScale = 1f;
+                try
+                {
+                    if (MalumMenu.minimapIconScale != null) iconScale = MalumMenu.minimapIconScale.Value;
+                }
+                catch
+                {
+                    iconScale = 1f;
+                }
+                if (iconScale < 0.50f) iconScale = 0.50f;
+                if (iconScale > 2.50f) iconScale = 2.50f;
+
+                var size = BodySize * (s / DefaultScale) * iconScale;
+                img.rectTransform.sizeDelta = new Vector2(size, size);
+                img.rectTransform.anchoredPosition = anchored;
+                img.color = new Color(0f, 1f, 0f, 0.85f);
+                img.enabled = true;
+            }
+        }
+
+        for (var i = 0; i < _tmpRemoveBodies.Count; i++)
+        {
+            var id = _tmpRemoveBodies[i];
+            if (_bodyUiById.TryGetValue(id, out var img) && img != null)
+            {
+                try { Object.Destroy(img.gameObject); } catch { }
+            }
+            _bodyUiById.Remove(id);
+            _bodyMapLocalById.Remove(id);
+        }
+    }
+
+    private void SnapshotBodiesForMeeting()
+    {
+        _freezeBodiesForMeeting = true;
+
+        if (Utils.isShip && ShipStatus.Instance != null)
+        {
+            try
+            {
+                DeadBody[] bodies = null;
+                try { bodies = Object.FindObjectsOfType<DeadBody>(true); } catch { bodies = null; }
+                if (bodies != null)
+                {
+                    for (var i = 0; i < bodies.Length; i++)
+                    {
+                        var b = bodies[i];
+                        if (b == null) continue;
+                        if (b.gameObject == null) continue;
+
+                        var id = b.gameObject.GetInstanceID();
+                        var pos = b.transform.position;
+                        pos /= ShipStatus.Instance.MapScale;
+                        pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
+                        _bodyMapLocalById[id] = new Vector2(pos.x, pos.y);
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        _frozenBodyMapLocalById.Clear();
+        foreach (var kvp in _bodyMapLocalById)
+        {
+            _frozenBodyMapLocalById[kvp.Key] = kvp.Value;
+        }
+    }
+
+    private void UpdateBodiesFrozen()
+    {
+        _tmpRemoveBodies.Clear();
+        foreach (var kvp in _bodyUiById)
+        {
+            _tmpRemoveBodies.Add(kvp.Key);
+        }
+
+        foreach (var kvp in _frozenBodyMapLocalById)
+        {
+            var id = kvp.Key;
+            RemoveTmpBody(id);
+
+            if (!_bodyUiById.TryGetValue(id, out var img) || img == null)
+            {
+                img = CreateHalo(_bodiesRoot, "Body", BodySize);
+                _bodyUiById[id] = img;
+            }
+
+            var mapLocal = kvp.Value;
+            if (!TryMapLocalToAnchored(mapLocal, out var anchored))
+            {
+                img.enabled = false;
+                continue;
+            }
+
+            var s = Mathf.Clamp(scale, MinScale, MaxScale);
+            var iconScale = 1f;
+            try
+            {
+                if (MalumMenu.minimapIconScale != null) iconScale = MalumMenu.minimapIconScale.Value;
+            }
+            catch
+            {
+                iconScale = 1f;
+            }
+            if (iconScale < 0.50f) iconScale = 0.50f;
+            if (iconScale > 2.50f) iconScale = 2.50f;
+
+            var size = BodySize * (s / DefaultScale) * iconScale;
+            img.rectTransform.sizeDelta = new Vector2(size, size);
+            img.rectTransform.anchoredPosition = anchored;
+            img.color = new Color(0f, 1f, 0f, 0.85f);
+            img.enabled = true;
+        }
+
+        for (var i = 0; i < _tmpRemoveBodies.Count; i++)
+        {
+            var id = _tmpRemoveBodies[i];
+            if (_bodyUiById.TryGetValue(id, out var img) && img != null)
+            {
+                try { Object.Destroy(img.gameObject); } catch { }
+            }
+            _bodyUiById.Remove(id);
+        }
+    }
+
+    private void ClearBodies()
+    {
+        foreach (var kvp in _bodyUiById)
+        {
+            var img = kvp.Value;
+            if (img == null) continue;
+            try { Object.Destroy(img.gameObject); } catch { }
+        }
+        _bodyUiById.Clear();
+        _tmpRemoveBodies.Clear();
+        _bodyMapLocalById.Clear();
+        _frozenBodyMapLocalById.Clear();
+        _freezeBodiesForMeeting = false;
+    }
+
+    private void RemoveTmpBody(int id)
+    {
+        for (var i = 0; i < _tmpRemoveBodies.Count; i++)
+        {
+            if (_tmpRemoveBodies[i] != id) continue;
+            _tmpRemoveBodies.RemoveAt(i);
+            return;
+        }
     }
 
     private static Color SafePlayerColor(PlayerControl p)
@@ -780,7 +1142,8 @@ public sealed class Radar : MonoBehaviour
     {
         if (_trailsRoot == null) return;
 
-        if (!CheatToggles.mapTrails || Utils.isMeeting || !Utils.isShip || ShipStatus.Instance == null)
+        var meeting = _wasMeeting;
+        if (!CheatToggles.mapTrails || !Utils.isShip || ShipStatus.Instance == null)
         {
             foreach (var kvp in _uiByPlayer)
             {
@@ -788,42 +1151,48 @@ public sealed class Radar : MonoBehaviour
                 if (ui == null || ui.trail == null) continue;
                 ui.trail.start = 0;
                 ui.trail.count = 0;
+                ui.trail.hasHeadPoint = false;
                 HideAllSegments(ui.trail);
             }
             return;
         }
 
-        var now = Time.time;
+        var now = meeting ? _meetingFreezeNow : Time.time;
         var keepSeconds = MinimapHandler.trailSeconds;
         if (keepSeconds < 5f) keepSeconds = 5f;
         if (keepSeconds > 60f) keepSeconds = 60f;
 
-        var players = PlayerControl.AllPlayerControls;
-        if (players != null)
+        if (!meeting)
         {
-            for (var i = 0; i < players.Count; i++)
+            var players = PlayerControl.AllPlayerControls;
+            if (players != null)
             {
-                var p = players[i];
-                if (p == null || p.Data == null) continue;
-                if (!_uiByPlayer.TryGetValue(p.PlayerId, out var ui) || ui == null || ui.trail == null) continue;
+                for (var i = 0; i < players.Count; i++)
+                {
+                    var p = players[i];
+                    if (p == null || p.Data == null) continue;
+                    if (!_uiByPlayer.TryGetValue(p.PlayerId, out var ui) || ui == null || ui.trail == null) continue;
 
-                var isImp = p.Data.Role != null && p.Data.Role.IsImpostor;
-                var isDead = p.Data.IsDead;
+                    var isImp = p.Data.Role != null && p.Data.Role.IsImpostor;
+                    var isDead = p.Data.IsDead;
 
-                var show = false;
-                if (isDead) show = CheatToggles.mapGhosts;
-                else if (isImp) show = CheatToggles.mapImps;
-                else show = CheatToggles.mapCrew;
-                if (!show) continue;
+                    var show = false;
+                    if (isDead) show = CheatToggles.mapGhosts;
+                    else if (isImp) show = CheatToggles.mapImps;
+                    else show = CheatToggles.mapCrew;
+                    if (!show) continue;
 
-                if (now < ui.trail.nextRecordTime) continue;
-                ui.trail.nextRecordTime = now + TrailWaypointIntervalSeconds;
+                    var pos = p.transform.position;
+                    pos /= ShipStatus.Instance.MapScale;
+                    pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
+                    ui.trail.headPoint = new Vector2(pos.x, pos.y);
+                    ui.trail.hasHeadPoint = true;
 
-                var pos = p.transform.position;
-                pos /= ShipStatus.Instance.MapScale;
-                pos.x *= Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
+                    if (now < ui.trail.nextRecordTime) continue;
+                    ui.trail.nextRecordTime = now + TrailWaypointIntervalSeconds;
 
-                AddTrailPoint(ui.trail, new Vector2(pos.x, pos.y), now);
+                    AddTrailPoint(ui.trail, new Vector2(pos.x, pos.y), now);
+                }
             }
         }
 
@@ -831,7 +1200,7 @@ public sealed class Radar : MonoBehaviour
         {
             var ui = kvp.Value;
             if (ui == null || ui.trail == null) continue;
-            TrimTrail(ui.trail, now, keepSeconds);
+            if (!meeting) TrimTrail(ui.trail, now, keepSeconds);
             RenderTrail(ui.trail, now, keepSeconds);
         }
     }
@@ -887,13 +1256,19 @@ public sealed class Radar : MonoBehaviour
         if (trail == null) return;
 
         var count = trail.count;
-        if (count <= 1)
+        if (count <= 0)
         {
             HideAllSegments(trail);
             return;
         }
 
-        var rawSegments = count - 1;
+        var rawSegments = trail.hasHeadPoint ? count : (count - 1);
+        if (rawSegments <= 0)
+        {
+            HideAllSegments(trail);
+            return;
+        }
+
         var needed = rawSegments;
         if (needed > TrailMaxSegments) needed = TrailMaxSegments;
         while (trail.segments.Count < needed)
@@ -907,43 +1282,47 @@ public sealed class Radar : MonoBehaviour
             trail.segments[i].enabled = i < needed;
         }
 
-        var step = 1;
-        if (rawSegments > TrailMaxSegments)
-        {
-            step = Mathf.CeilToInt(rawSegments / (float)TrailMaxSegments);
-            if (step < 1) step = 1;
-        }
+        var newestIdx = (trail.start + trail.count - 1) % TrailMaxWaypoints;
+        var fromLocal = trail.hasHeadPoint ? trail.headPoint : trail.points[newestIdx];
+        var fromTime = trail.hasHeadPoint ? now : trail.times[newestIdx];
+        var idx = newestIdx;
+        var remainingLinks = trail.hasHeadPoint ? trail.count : (trail.count - 1);
 
         for (var i = 0; i < needed; i++)
         {
-            var aRaw = i * step;
-            var bRaw = (i + 1) * step;
-            if (bRaw > rawSegments) bRaw = rawSegments;
-
-            var aIdx = (trail.start + aRaw) % TrailMaxWaypoints;
-            var bIdx = (trail.start + bRaw) % TrailMaxWaypoints;
-            var at = trail.times[aIdx];
-            var bt = trail.times[bIdx];
-            if (bt < at)
+            if (remainingLinks <= 0)
             {
                 trail.segments[i].enabled = false;
                 continue;
             }
 
-            if ((bt - at) > (TrailWaypointIntervalSeconds * 3f))
+            Vector2 toLocal;
+            float toTime;
+            if (trail.hasHeadPoint && i == 0)
             {
-                trail.segments[i].enabled = false;
-                continue;
+                toLocal = trail.points[newestIdx];
+                toTime = trail.times[newestIdx];
             }
+            else
+            {
+                idx = (idx - 1 + TrailMaxWaypoints) % TrailMaxWaypoints;
+                toLocal = trail.points[idx];
+                toTime = trail.times[idx];
+            }
+            remainingLinks--;
 
-            if (!TryMapLocalToAnchored(trail.points[aIdx], out var pa))
+            if (!TryMapLocalToAnchored(fromLocal, out var pa))
             {
                 trail.segments[i].enabled = false;
+                fromLocal = toLocal;
+                fromTime = toTime;
                 continue;
             }
-            if (!TryMapLocalToAnchored(trail.points[bIdx], out var pb))
+            if (!TryMapLocalToAnchored(toLocal, out var pb))
             {
                 trail.segments[i].enabled = false;
+                fromLocal = toLocal;
+                fromTime = toTime;
                 continue;
             }
 
@@ -952,6 +1331,8 @@ public sealed class Radar : MonoBehaviour
             if (len < 0.001f)
             {
                 trail.segments[i].enabled = false;
+                fromLocal = toLocal;
+                fromTime = toTime;
                 continue;
             }
 
@@ -959,7 +1340,7 @@ public sealed class Radar : MonoBehaviour
             var angle = Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg;
 
             var seg = trail.segments[i];
-            var age = now - trail.times[aIdx];
+            var age = now - toTime;
             var t = keepSeconds > 0.001f ? Mathf.Clamp01(age / keepSeconds) : 1f;
             var alpha = Mathf.Lerp(TrailAlphaStart, TrailAlphaEnd, t);
             seg.color = new Color(trail.color.r, trail.color.g, trail.color.b, alpha);
@@ -967,6 +1348,10 @@ public sealed class Radar : MonoBehaviour
             rt.anchoredPosition = mid;
             rt.sizeDelta = new Vector2(len, TrailWidth);
             rt.localRotation = Quaternion.Euler(0f, 0f, angle);
+            seg.enabled = true;
+
+            fromLocal = toLocal;
+            fromTime = toTime;
         }
     }
 
@@ -1007,16 +1392,13 @@ public sealed class Radar : MonoBehaviour
 
         var s = Mathf.Clamp(scale, MinScale, MaxScale);
         var pos = anchoredPosition;
-        var offset = mapOffset;
 
         var posChanged = Vector2.Distance(pos, _lastSavedAnchored) > 0.01f;
         var scaleChanged = Mathf.Abs(s - _lastSavedScale) > 0.0001f;
-        var offsetChanged = Vector2.Distance(offset, _lastSavedMapOffset) > 0.001f;
-        if (!posChanged && !scaleChanged && !offsetChanged) return;
+        if (!posChanged && !scaleChanged) return;
 
         _lastSavedAnchored = pos;
         _lastSavedScale = s;
-        _lastSavedMapOffset = offset;
 
         if (MalumMenu.Plugin == null) return;
 
@@ -1025,23 +1407,10 @@ public sealed class Radar : MonoBehaviour
             MalumMenu.minimapScale.Value = s;
             MalumMenu.minimapPosX.Value = pos.x;
             MalumMenu.minimapPosY.Value = pos.y;
-            if (MalumMenu.minimapMapOffsetX != null) MalumMenu.minimapMapOffsetX.Value = offset.x;
-            if (MalumMenu.minimapMapOffsetY != null) MalumMenu.minimapMapOffsetY.Value = offset.y;
             MalumMenu.Plugin.Config.Save();
         }
         catch
         {
-        }
-
-        if (offsetChanged && CheatToggles.debugMinimap && MalumMenu.Log != null)
-        {
-            try
-            {
-                MalumMenu.Log.LogInfo($"Radar: saved MapOffset=({offset.x:0.00},{offset.y:0.00})");
-            }
-            catch
-            {
-            }
         }
     }
 }

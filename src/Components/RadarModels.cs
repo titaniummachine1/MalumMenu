@@ -11,6 +11,8 @@ internal sealed class RadarTrail
     public int start;
     public int count;
     public float nextRecordTime;
+    public Vector2 headPoint;
+    public bool hasHeadPoint;
     public readonly List<Image> segments;
     public Color color;
 
@@ -27,6 +29,7 @@ internal sealed class RadarPlayerUi
     public byte id;
     public Image highlight;
     public Image dot;
+    public float lastDotSize;
+    public float lastHighlightSize;
     public RadarTrail trail;
 }
-

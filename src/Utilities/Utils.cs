@@ -187,37 +187,60 @@ public static class Utils
 
     public static void CompleteTask(PlayerTask task)
     {
-        if (task == null) return;
-        if (task.IsComplete) return;
-        if (!isClient || !isPlayer) return;
+        TryCompleteTask(task, out _);
+    }
+
+    public static bool TryCompleteTask(PlayerTask task, out string detail)
+    {
+        detail = null;
+        if (task == null) { detail = "task null"; return false; }
+        if (task.IsComplete) { detail = "already complete"; return false; }
+        if (!isClient) { detail = "not client"; return false; }
+        if (!isPlayer) { detail = "not player"; return false; }
 
         if (isFreePlay)
         {
-            PlayerControl.LocalPlayer.RpcCompleteTask(task.Id);
-            return;
+            try
+            {
+                PlayerControl.LocalPlayer.RpcCompleteTask(task.Id);
+                detail = "ok freeplay rpc";
+                return true;
+            }
+            catch (Exception e)
+            {
+                detail = "freeplay rpc threw " + e.GetType().Name;
+                return false;
+            }
         }
 
         var hostData = AmongUsClient.Instance.GetHost();
-        if (hostData == null || hostData.Character.Data.Disconnected) return;
+        if (hostData == null) { detail = "host null"; return false; }
+        if (hostData.Character == null) { detail = "host character null"; return false; }
+        if (hostData.Character.Data == null) { detail = "host data null"; return false; }
+        if (hostData.Character.Data.Disconnected) { detail = "host disconnected"; return false; }
 
         try
         {
             PlayerControl.LocalPlayer.RpcCompleteTask(task.Id);
-            return;
+            detail = "ok rpc";
+            return true;
         }
-        catch
+        catch (Exception e1)
         {
-        }
-
-        try
-        {
-            var hostId = AmongUsClient.Instance.GetClientIdFromCharacter(hostData.Character);
-            var writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)RpcCalls.CompleteTask, SendOption.None, hostId);
-            writer.WritePacked(task.Id);
-            AmongUsClient.Instance.FinishRpcImmediately(writer);
-        }
-        catch
-        {
+            try
+            {
+                var hostId = AmongUsClient.Instance.GetClientIdFromCharacter(hostData.Character);
+                var writer = AmongUsClient.Instance.StartRpcImmediately(PlayerControl.LocalPlayer.NetId, (byte)RpcCalls.CompleteTask, SendOption.None, hostId);
+                writer.WritePacked(task.Id);
+                AmongUsClient.Instance.FinishRpcImmediately(writer);
+                detail = "ok fallback after " + e1.GetType().Name;
+                return true;
+            }
+            catch (Exception e2)
+            {
+                detail = "rpc threw " + e1.GetType().Name + "; fallback threw " + e2.GetType().Name;
+                return false;
+            }
         }
     }
 

@@ -54,9 +54,8 @@ public partial class MalumMenu : BasePlugin
     public static ConfigEntry<float> minimapScale;
     public static ConfigEntry<float> minimapPosX;
     public static ConfigEntry<float> minimapPosY;
-    public static ConfigEntry<float> minimapMapOffsetX;
-    public static ConfigEntry<float> minimapMapOffsetY;
     public static ConfigEntry<string> minimapBgBan;
+    public static ConfigEntry<float> minimapIconScale;
     public static ConfigEntry<int> adaptMaxStrength;
     public static ConfigEntry<float> adaptMaxCooldown;
     public static ConfigEntry<float> attackLogDelay;
@@ -108,7 +107,7 @@ public partial class MalumMenu : BasePlugin
 
             autoTaskDefaultSeconds = Config.Bind("MalumMenu.Tasks",
                                     "AutoTaskDefaultSeconds",
-                                    4f,
+                                10f,
                                     new ConfigDescription(
                                         "Default duration (in seconds) used by Auto-Complete On Open when no best time exists.",
                                         new AcceptableValueRange<float>(0.1f, 10f)
@@ -164,20 +163,18 @@ public partial class MalumMenu : BasePlugin
                                     Radar.anchoredPosition.y,
                                     "Anchored Y position of the always-on minimap window.");
 
-            minimapMapOffsetX = Config.Bind("MalumMenu.Minimap",
-                                    "MapOffsetX",
-                                    Radar.mapOffset.x,
-                                    "Calibration X offset for minimap icons/trails (map local units).");
-
-            minimapMapOffsetY = Config.Bind("MalumMenu.Minimap",
-                                    "MapOffsetY",
-                                    Radar.mapOffset.y,
-                                    "Calibration Y offset for minimap icons/trails (map local units).");
-
             minimapBgBan = Config.Bind("MalumMenu.Minimap",
                                     "BackgroundBan",
                                 "task,fadedbackground,square",
                                     "Comma/space separated list of substrings. If the chosen minimap background SpriteRenderer's GameObject name or Sprite name contains any token, it will be skipped.");
+
+            minimapIconScale = Config.Bind("MalumMenu.Minimap",
+                                    "IconScale",
+                                    1f,
+                                    new ConfigDescription(
+                                        "Scale multiplier for player/body icons in the always-on minimap window.",
+                                        new AcceptableValueRange<float>(0.50f, 2.50f)
+                                    ));
 
             // GuestMode config settings are commented out as the cheats are broken in latest updates
 
@@ -330,7 +327,6 @@ public partial class MalumMenu : BasePlugin
 
             Radar.scale = minimapScale.Value;
             Radar.anchoredPosition = new Vector2(minimapPosX.Value, minimapPosY.Value);
-            Radar.mapOffset = new Vector2(minimapMapOffsetX.Value, minimapMapOffsetY.Value);
 
             // Disables Telemetry (haven't fully tested if it works, but according to Unity docs it should)
             if (noTelemetry.Value)

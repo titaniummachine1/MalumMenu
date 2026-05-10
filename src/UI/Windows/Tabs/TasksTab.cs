@@ -43,8 +43,11 @@ public class TasksTab : ITab
         GUILayout.Label("Automation", GUIStylePreset.TabSubtitle);
 
         CheatToggles.autoTaskOnOpen = GUILayout.Toggle(CheatToggles.autoTaskOnOpen, " Auto-Complete On Open");
-
-        CheatToggles.autoTaskUseBestTime = GUILayout.Toggle(CheatToggles.autoTaskUseBestTime, " Use Best Recorded Time");
+        if (CheatToggles.autoTaskOnOpen)
+        {
+            CheatToggles.autoTaskUseBestTime = GUILayout.Toggle(CheatToggles.autoTaskUseBestTime, " Use Best Recorded Time");
+            CheatToggles.autoTaskShowProgress = GUILayout.Toggle(CheatToggles.autoTaskShowProgress, " Show Automatic Task Progress");
+        }
 
         CheatToggles.debugTaskAutomation = GUILayout.Toggle(CheatToggles.debugTaskAutomation, " Debug Task Automation (Log)");
     }
