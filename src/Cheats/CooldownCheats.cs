@@ -38,7 +38,11 @@ public static class CooldownCheats
         var ship = ShipStatus.Instance;
         if (ship == null) return;
 
-        var sysObj = ship.Systems[SystemTypes.Doors];
+        if (ship.Systems == null) return;
+
+        object sysObj;
+        try { sysObj = ship.Systems[SystemTypes.Doors]; }
+        catch { return; }
         if (sysObj == null) return;
 
         var noCd = CheatToggles.noDoorCooldown;

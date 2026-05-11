@@ -12,7 +12,6 @@ public static class MinimapHandler
     private const float TrailWaypointIntervalSeconds = 0.25f;
     private const int TrailMaxWaypoints = 256;
     private static float _nextTrailRecordTime;
-    private static bool _wasMeeting;
     private const int MeetingFreezeStepsBack = 1;
 
     private sealed class TrailLine
@@ -20,6 +19,7 @@ public static class MinimapHandler
         public byte playerId;
         public LineRenderer lineMap;
         public LineRenderer lineWindow;
+        public int lineMapOwnerMapId;
         public Vector3[] positions = new Vector3[TrailMaxWaypoints];
         public float[] times = new float[TrailMaxWaypoints];
         public int start;
@@ -106,7 +106,10 @@ public static class MinimapHandler
                 // Sync the position of active herePoint icons with their players
                 if (Utils.isMeeting && _trailsByPlayer.TryGetValue(herePoint.player.PlayerId, out var trail) && trail != null && trail.count > 0)
                 {
-                    var idx = (trail.start + trail.count - 1) % TrailMaxWaypoints;
+                    var usedCount = trail.count;
+                    if (usedCount > MeetingFreezeStepsBack) usedCount -= MeetingFreezeStepsBack;
+                    if (usedCount < 1) usedCount = 1;
+                    var idx = (trail.start + usedCount - 1) % TrailMaxWaypoints;
                     herePoint.sprite.transform.localPosition = trail.positions[idx];
                 }
                 else
@@ -139,16 +142,7 @@ public static class MinimapHandler
         if (!CheatToggles.mapTrails) return;
         if (!Utils.isShip) return;
         if (ShipStatus.Instance == null) return;
-        if (Utils.isMeeting)
-        {
-            if (!_wasMeeting)
-            {
-                _wasMeeting = true;
-                RewindTrailsStepsBack(MeetingFreezeStepsBack);
-            }
-            return;
-        }
-        if (_wasMeeting) _wasMeeting = false;
+        if (Utils.isMeeting) return;
 
         var now = Time.time;
         if (now < _nextTrailRecordTime) return;
@@ -208,32 +202,17 @@ public static class MinimapHandler
         TrimAll(now);
     }
 
-    private static void RewindTrailsStepsBack(int stepsBack)
-    {
-        if (stepsBack < 0) stepsBack = 0;
-
-        foreach (var kvp in _trailsByPlayer)
-        {
-            var trail = kvp.Value;
-            if (trail == null) continue;
-
-            for (var i = 0; i < stepsBack; i++)
-            {
-                if (trail.count <= 1) break;
-                trail.count--;
-            }
-
-            if (trail.lineMap != null) RenderTrail(trail, false);
-            if (trail.lineWindow != null) RenderTrail(trail, true);
-        }
-    }
-
     private static void RenderTrails(MapBehaviour map)
     {
         if (!CheatToggles.mapTrails) return;
         if (!Utils.isShip) return;
         if (ShipStatus.Instance == null) return;
         var meeting = Utils.isMeeting;
+        if (map == null) return;
+
+        var mapId = 0;
+        try { mapId = map.GetInstanceID(); }
+        catch { mapId = 0; }
 
         var now = Time.time;
         var keepSeconds = trailSeconds;
@@ -244,6 +223,14 @@ public static class MinimapHandler
         {
             var trail = kvp.Value;
             if (trail == null) continue;
+
+            if (trail.lineMap != null && mapId != 0 && trail.lineMapOwnerMapId != mapId)
+            {
+                try { Object.Destroy(trail.lineMap.gameObject); } catch { }
+                trail.lineMap = null;
+                trail.lastRenderedCountMap = 0;
+                trail.lineMapOwnerMapId = 0;
+            }
 
             if (trail.count > 1 && trail.lineMap == null)
             {
@@ -333,6 +320,7 @@ public static class MinimapHandler
         t.playerId = playerId;
         t.lineMap = null;
         t.lineWindow = null;
+        t.lineMapOwnerMapId = 0;
         t.start = 0;
         t.count = 0;
         t.lastRenderedCountMap = 0;
@@ -346,6 +334,7 @@ public static class MinimapHandler
         if (map == null) return;
         if (trail == null) return;
         if (trail.lineMap != null) return;
+        if (map.HerePoint == null) return;
 
         var go = new GameObject($"MalumTrail_{trail.playerId}");
         go.transform.SetParent(map.HerePoint.transform.parent, false);
@@ -365,6 +354,7 @@ public static class MinimapHandler
         lr.endColor = trail.color;
 
         trail.lineMap = lr;
+        trail.lineMapOwnerMapId = map.GetInstanceID();
     }
 
     private static void AttachTrailRenderer(Transform parent, Material material, TrailLine trail, bool isWindow)
@@ -467,6 +457,10 @@ public static class MinimapHandler
     private static void RenderTrail(TrailLine trail, bool isWindow)
     {
         var count = trail.count;
+        if (Utils.isMeeting && count > (MeetingFreezeStepsBack + 1))
+        {
+            count -= MeetingFreezeStepsBack;
+        }
         var lr = isWindow ? trail.lineWindow : trail.lineMap;
         if (lr == null) return;
         var lastCount = isWindow ? trail.lastRenderedCountWindow : trail.lastRenderedCountMap;
