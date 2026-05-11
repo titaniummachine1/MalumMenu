@@ -143,8 +143,27 @@ public sealed class Radar : MonoBehaviour
 
     private void EnsureBigMapOverlay()
     {
-        if (_mapOverlayRoot != null) return;
         if (_mapSpace == null) return;
+
+        // If the existing overlay is not a child of the current _mapSpace it is stale
+        // (e.g. RefreshTemplate() picked a new mapSpace). Destroy it and rebuild.
+        if (_mapOverlayRoot != null && _mapOverlayRoot.parent != _mapSpace)
+        {
+            try { Object.Destroy(_mapOverlayRoot.gameObject); } catch { }
+            _mapOverlayRoot = null;
+
+            // Also clear the stale segment lists that pointed to GameObjects under the old parent.
+            foreach (var kvp in _uiByPlayer)
+            {
+                var ui = kvp.Value;
+                if (ui == null || ui.trail == null) continue;
+                ui.trail.mapSegments.Clear();
+            }
+            _mapBodyById.Clear();
+            ClearMapPlayers();
+        }
+
+        if (_mapOverlayRoot != null) return;
 
         var go = new GameObject("MalumMapOverlay");
         go.hideFlags = HideFlags.DontSaveInEditor | HideFlags.DontSaveInBuild;
@@ -1940,20 +1959,8 @@ public sealed class Radar : MonoBehaviour
         if (_trailsRoot == null) return;
 
         var meeting = _wasMeeting;
-
-        // During a meeting the trail data must survive so UpdateBigMapTrails() can read it.
-        // If trails are disabled or the ship is gone we clear everything including the data.
-        // If we are simply in a meeting we only hide the radar-side Image segments without
-        // zeroing out trail.count/start, leaving the frozen data intact for the big-map renderer.
-        if (!CheatToggles.mapTrails || !Utils.isShip || ShipStatus.Instance == null)
+        if (!CheatToggles.mapTrails || !Utils.isInGame || !Utils.isShip || ShipStatus.Instance == null)
         {
-            ClearTrails();
-            return;
-        }
-
-        if (!Utils.isInGame)
-        {
-            // Not in game but still a ship (shouldn't normally happen, but be safe).
             ClearTrails();
             return;
         }
@@ -1963,45 +1970,35 @@ public sealed class Radar : MonoBehaviour
         if (keepSeconds < 5f) keepSeconds = 5f;
         if (keepSeconds > 60f) keepSeconds = 60f;
 
-        if (meeting)
+        if (!meeting)
         {
-            // During a meeting: hide the radar segments but do NOT clear the trail data.
-            // UpdateBigMapTrails() will still render the frozen trails on the in-game map.
-            foreach (var kvp in _uiByPlayer)
+            var players = PlayerControl.AllPlayerControls;
+            if (players != null)
             {
-                var ui = kvp.Value;
-                if (ui == null || ui.trail == null) continue;
-                HideAllSegments(ui.trail);
-            }
-            return;
-        }
+                for (var i = 0; i < players.Count; i++)
+                {
+                    var p = players[i];
+                    if (p == null || p.Data == null) continue;
+                    if (!_uiByPlayer.TryGetValue(p.PlayerId, out var ui) || ui == null || ui.trail == null) continue;
 
-        var players = PlayerControl.AllPlayerControls;
-        if (players != null)
-        {
-            for (var i = 0; i < players.Count; i++)
-            {
-                var p = players[i];
-                if (p == null || p.Data == null) continue;
-                if (!_uiByPlayer.TryGetValue(p.PlayerId, out var ui) || ui == null || ui.trail == null) continue;
+                    var isImp = p.Data.Role != null && p.Data.Role.IsImpostor;
+                    var isDead = p.Data.IsDead;
 
-                var isImp = p.Data.Role != null && p.Data.Role.IsImpostor;
-                var isDead = p.Data.IsDead;
+                    var show = false;
+                    if (isDead) show = CheatToggles.mapGhosts;
+                    else if (isImp) show = CheatToggles.mapImps;
+                    else show = CheatToggles.mapCrew;
+                    if (!show) continue;
 
-                var show = false;
-                if (isDead) show = CheatToggles.mapGhosts;
-                else if (isImp) show = CheatToggles.mapImps;
-                else show = CheatToggles.mapCrew;
-                if (!show) continue;
+                    if (!TryWorldToMapLocal(p.transform.position, out var mapLocal)) continue;
+                    ui.trail.headPoint = mapLocal;
+                    ui.trail.hasHeadPoint = true;
 
-                if (!TryWorldToMapLocal(p.transform.position, out var mapLocal)) continue;
-                ui.trail.headPoint = mapLocal;
-                ui.trail.hasHeadPoint = true;
+                    if (now < ui.trail.nextRecordTime) continue;
+                    ui.trail.nextRecordTime = now + TrailWaypointIntervalSeconds;
 
-                if (now < ui.trail.nextRecordTime) continue;
-                ui.trail.nextRecordTime = now + TrailWaypointIntervalSeconds;
-
-                AddTrailPoint(ui.trail, mapLocal, now);
+                    AddTrailPoint(ui.trail, mapLocal, now);
+                }
             }
         }
 
@@ -2009,7 +2006,7 @@ public sealed class Radar : MonoBehaviour
         {
             var ui = kvp.Value;
             if (ui == null || ui.trail == null) continue;
-            TrimTrail(ui.trail, now, keepSeconds);
+            if (!meeting) TrimTrail(ui.trail, now, keepSeconds);
             RenderTrail(ui.trail, now, keepSeconds);
         }
     }
