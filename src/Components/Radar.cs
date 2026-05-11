@@ -963,6 +963,7 @@ public sealed class Radar : MonoBehaviour
     private void HandleRadarRightClick()
     {
         if (_window == null) return;
+        if (!CheatToggles.minimapDoorSabotage) return;
         if (!Input.GetMouseButtonDown(1)) return;
         if (!RectTransformUtility.RectangleContainsScreenPoint(_window, Input.mousePosition, null)) return;
 

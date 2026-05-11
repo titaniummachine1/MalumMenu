@@ -49,6 +49,7 @@ public class MinimapTab : ITab
         GUILayout.Label("Extras", GUIStylePreset.TabSubtitle);
 
         CheatToggles.mapImpsHighlight = GUILayout.Toggle(CheatToggles.mapImpsHighlight, " Highlight Impostors (Red)");
+        CheatToggles.minimapDoorSabotage = GUILayout.Toggle(CheatToggles.minimapDoorSabotage, " Door Sabotage (Right-Click)");
 
         CheatToggles.mapTrails = GUILayout.Toggle(CheatToggles.mapTrails, " Player Trails");
         if (CheatToggles.mapTrails)
