@@ -1939,8 +1939,20 @@ public sealed class Radar : MonoBehaviour
         if (_trailsRoot == null) return;
 
         var meeting = _wasMeeting;
-        if (!CheatToggles.mapTrails || !Utils.isInGame || !Utils.isShip || ShipStatus.Instance == null)
+
+        // During a meeting the trail data must survive so UpdateBigMapTrails() can read it.
+        // If trails are disabled or the ship is gone we clear everything including the data.
+        // If we are simply in a meeting we only hide the radar-side Image segments without
+        // zeroing out trail.count/start, leaving the frozen data intact for the big-map renderer.
+        if (!CheatToggles.mapTrails || !Utils.isShip || ShipStatus.Instance == null)
         {
+            ClearTrails();
+            return;
+        }
+
+        if (!Utils.isInGame)
+        {
+            // Not in game but still a ship (shouldn't normally happen, but be safe).
             ClearTrails();
             return;
         }
@@ -1950,35 +1962,45 @@ public sealed class Radar : MonoBehaviour
         if (keepSeconds < 5f) keepSeconds = 5f;
         if (keepSeconds > 60f) keepSeconds = 60f;
 
-        if (!meeting)
+        if (meeting)
         {
-            var players = PlayerControl.AllPlayerControls;
-            if (players != null)
+            // During a meeting: hide the radar segments but do NOT clear the trail data.
+            // UpdateBigMapTrails() will still render the frozen trails on the in-game map.
+            foreach (var kvp in _uiByPlayer)
             {
-                for (var i = 0; i < players.Count; i++)
-                {
-                    var p = players[i];
-                    if (p == null || p.Data == null) continue;
-                    if (!_uiByPlayer.TryGetValue(p.PlayerId, out var ui) || ui == null || ui.trail == null) continue;
+                var ui = kvp.Value;
+                if (ui == null || ui.trail == null) continue;
+                HideAllSegments(ui.trail);
+            }
+            return;
+        }
 
-                    var isImp = p.Data.Role != null && p.Data.Role.IsImpostor;
-                    var isDead = p.Data.IsDead;
+        var players = PlayerControl.AllPlayerControls;
+        if (players != null)
+        {
+            for (var i = 0; i < players.Count; i++)
+            {
+                var p = players[i];
+                if (p == null || p.Data == null) continue;
+                if (!_uiByPlayer.TryGetValue(p.PlayerId, out var ui) || ui == null || ui.trail == null) continue;
 
-                    var show = false;
-                    if (isDead) show = CheatToggles.mapGhosts;
-                    else if (isImp) show = CheatToggles.mapImps;
-                    else show = CheatToggles.mapCrew;
-                    if (!show) continue;
+                var isImp = p.Data.Role != null && p.Data.Role.IsImpostor;
+                var isDead = p.Data.IsDead;
 
-                    if (!TryWorldToMapLocal(p.transform.position, out var mapLocal)) continue;
-                    ui.trail.headPoint = mapLocal;
-                    ui.trail.hasHeadPoint = true;
+                var show = false;
+                if (isDead) show = CheatToggles.mapGhosts;
+                else if (isImp) show = CheatToggles.mapImps;
+                else show = CheatToggles.mapCrew;
+                if (!show) continue;
 
-                    if (now < ui.trail.nextRecordTime) continue;
-                    ui.trail.nextRecordTime = now + TrailWaypointIntervalSeconds;
+                if (!TryWorldToMapLocal(p.transform.position, out var mapLocal)) continue;
+                ui.trail.headPoint = mapLocal;
+                ui.trail.hasHeadPoint = true;
 
-                    AddTrailPoint(ui.trail, mapLocal, now);
-                }
+                if (now < ui.trail.nextRecordTime) continue;
+                ui.trail.nextRecordTime = now + TrailWaypointIntervalSeconds;
+
+                AddTrailPoint(ui.trail, mapLocal, now);
             }
         }
 
@@ -1986,7 +2008,7 @@ public sealed class Radar : MonoBehaviour
         {
             var ui = kvp.Value;
             if (ui == null || ui.trail == null) continue;
-            if (!meeting) TrimTrail(ui.trail, now, keepSeconds);
+            TrimTrail(ui.trail, now, keepSeconds);
             RenderTrail(ui.trail, now, keepSeconds);
         }
     }
