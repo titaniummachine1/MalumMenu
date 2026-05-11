@@ -762,6 +762,7 @@ public sealed class Radar : MonoBehaviour
         UpdatePlayers();
         UpdateBodies();
         UpdateTrails();
+        HandleRadarRightClick();
         MaybeSaveWindow();
     }
 
@@ -913,6 +914,99 @@ public sealed class Radar : MonoBehaviour
         if (sf < 0.0001f) sf = 1f;
         var delta = (Vector2)Input.mousePosition - _dragStartMouse;
         anchoredPosition = _dragStartAnchored + (delta / sf);
+    }
+
+    // Converts a screen-space mouse position to map-local coordinates (inverse of TryMapLocalToAnchored).
+    // Returns false if the radar background data is not yet initialized.
+    private bool TryScreenToMapLocal(Vector2 screenPos, out Vector2 mapLocal)
+    {
+        mapLocal = default;
+
+        if (_contentRoot == null) return false;
+        if (_bgRenderer == null) return false;
+        if (_bgRenderer.sprite == null) return false;
+        if (_mapSpace == null) return false;
+
+        var bsize = _bgBoundsSize;
+        if (bsize.x <= 0.0001f || bsize.y <= 0.0001f) return false;
+
+        // Step 1: Convert screen position to content-root local position.
+        var isInsideContent = RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            _contentRoot, screenPos, null, out var contentLocal);
+        if (!isInsideContent) return false;
+
+        // Step 2: Convert content-root local to UV [0..1] range.
+        var rect = _contentRoot.rect;
+        var w = rect.width;
+        var h = rect.height;
+        if (w <= 0.0001f || h <= 0.0001f) return false;
+
+        // anchoredPosition = (u - 0.5) * w  =>  u = (anchoredPos / w) + 0.5
+        var u = (contentLocal.x / w) + 0.5f;
+        var v = (contentLocal.y / h) + 0.5f;
+
+        // Step 3: UV to bg-renderer local position.
+        var bgLocal = new Vector3(
+            _bgBoundsMin.x + u * bsize.x,
+            _bgBoundsMin.y + v * bsize.y,
+            0f);
+
+        // Step 4: bg-renderer local -> world -> map-space local.
+        var world = _bgRenderer.transform.TransformPoint(bgLocal);
+        var mapSpaceLocal = _mapSpace.InverseTransformPoint(world);
+        mapLocal = new Vector2(mapSpaceLocal.x, mapSpaceLocal.y);
+        return true;
+    }
+
+    // Handles right-clicking on the minimap to close the nearest door room.
+    // Only works when the local player is an impostor.
+    private void HandleRadarRightClick()
+    {
+        if (_window == null) return;
+        if (!Input.GetMouseButtonDown(1)) return;
+        if (!RectTransformUtility.RectangleContainsScreenPoint(_window, Input.mousePosition, null)) return;
+
+        var localPlayer = PlayerControl.LocalPlayer;
+        if (localPlayer == null) return;
+        if (localPlayer.Data == null) return;
+        if (localPlayer.Data.Role == null) return;
+
+        var isImpostor = localPlayer.Data.Role.IsImpostor;
+        if (!isImpostor) return;
+
+        if (!Utils.isShip || ShipStatus.Instance == null) return;
+        if (ShipStatus.Instance.AllDoors == null || ShipStatus.Instance.AllDoors.Count <= 0) return;
+
+        if (!TryScreenToMapLocal(Input.mousePosition, out var clickedMapLocal)) return;
+
+        // Find the room whose door is closest in map-local space to where the player clicked.
+        var closestRoom = SystemTypes.Hallway;
+        var closestDistanceSq = float.MaxValue;
+        var foundAny = false;
+
+        var allDoors = ShipStatus.Instance.AllDoors;
+        for (var i = 0; i < allDoors.Count; i++)
+        {
+            var door = allDoors[i];
+            if (door == null) continue;
+
+            if (!TryWorldToMapLocal(door.transform.position, out var doorMapLocal)) continue;
+
+            var dx = doorMapLocal.x - clickedMapLocal.x;
+            var dy = doorMapLocal.y - clickedMapLocal.y;
+            var distSq = (dx * dx) + (dy * dy);
+
+            if (distSq < closestDistanceSq)
+            {
+                closestDistanceSq = distSq;
+                closestRoom = door.Room;
+                foundAny = true;
+            }
+        }
+
+        if (!foundAny) return;
+
+        DoorsHandler.CloseDoorsInRoom(closestRoom);
     }
 
     private void RefreshTemplate()
