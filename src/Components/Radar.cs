@@ -736,8 +736,8 @@ public sealed class Radar : MonoBehaviour
             UpdateBackground();
             UpdatePlayers();
             UpdateBodies();
-            UpdateTrails();
             UpdateBigMapOverlay();
+            UpdateTrails();
             return;
         }
 
@@ -1959,7 +1959,7 @@ public sealed class Radar : MonoBehaviour
         if (_trailsRoot == null) return;
 
         var meeting = _wasMeeting;
-        if (!CheatToggles.mapTrails || !Utils.isInGame || !Utils.isShip || ShipStatus.Instance == null)
+        if (!CheatToggles.mapTrails || (!Utils.isInGame && !meeting) || !Utils.isShip || ShipStatus.Instance == null)
         {
             ClearTrails();
             return;
