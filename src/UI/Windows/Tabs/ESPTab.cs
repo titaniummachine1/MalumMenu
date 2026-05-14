@@ -82,6 +82,8 @@ public class ESPTab : ITab
     {
         GUILayout.Label("Minimap", GUIStylePreset.TabSubtitle);
 
+        CheatToggles.minimapAlwaysOn = GUILayout.Toggle(CheatToggles.minimapAlwaysOn, " Enable Minimap");
+
         CheatToggles.mapCrew = GUILayout.Toggle(CheatToggles.mapCrew, " Crewmates");
 
         CheatToggles.mapImps = GUILayout.Toggle(CheatToggles.mapImps, " Impostors");
@@ -89,5 +91,11 @@ public class ESPTab : ITab
         CheatToggles.mapGhosts = GUILayout.Toggle(CheatToggles.mapGhosts, " Ghosts");
 
         CheatToggles.colorBasedMap = GUILayout.Toggle(CheatToggles.colorBasedMap, " Color-based");
+
+        CheatToggles.mapTrails = GUILayout.Toggle(CheatToggles.mapTrails, " Enable Trails");
+
+        CheatToggles.minimapHideDuringMeeting = GUILayout.Toggle(CheatToggles.minimapHideDuringMeeting, " Hide During Meeting");
+
+        CheatToggles.mapTrailsOnIngameMap = GUILayout.Toggle(CheatToggles.mapTrailsOnIngameMap, " Trails on Ingame Map");
     }
 }

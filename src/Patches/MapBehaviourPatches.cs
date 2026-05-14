@@ -50,6 +50,8 @@ public static class MapBehaviour_FixedUpdate
     // Postfix patch of MapBehaviour.FixedUpdate to update each herePoint icon's color and position on the map based on their respective player
     public static void Postfix(MapBehaviour __instance)
     {
+        MinimapHandler.RecordTrailPoints();
+
         // Reset map if miniMap cheat is disabled
         if (MinimapHandler.IsCheatEnabled() != MinimapHandler.minimapActive)
         {
@@ -59,6 +61,8 @@ public static class MapBehaviour_FixedUpdate
                 __instance.ShowNormalMap();
             }
         }
+
+        MinimapHandler.RenderTrailsOnMap(__instance);
 
         // Properly handles each herePoint icon on the map
         var temp = MinimapHandler.herePoints;
@@ -78,7 +82,7 @@ public static class MapBehaviour_FixedUpdate
 [HarmonyPatch(typeof(MapBehaviour), nameof(MapBehaviour.Close))]
 public static class MapBehaviour_Close
 {
-    // Postfix patch of MapBehaviour.Close to clean up all herePoint icons
+    // Postfix patch of MapBehaviour.Close to clean up all herePoint icons and trail renderers
     public static void Postfix(MapBehaviour __instance)
     {
         try
@@ -87,5 +91,7 @@ public static class MapBehaviour_Close
             MinimapHandler.herePoints.Clear();
         }
         catch { }
+
+        MinimapHandler.DestroyTrailRenderers();
     }
 }

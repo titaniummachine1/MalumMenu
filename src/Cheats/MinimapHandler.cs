@@ -8,9 +8,105 @@ public static class MinimapHandler
     public static List<HerePoint> herePoints = new List<HerePoint>();
     public static List<HerePoint> herePointsToRemove = new List<HerePoint>();
 
+    private static readonly Dictionary<byte, List<Vector3>> _trails = new();
+
     public static bool IsCheatEnabled()
     {
+        if (CheatToggles.minimapHideDuringMeeting && Utils.isMeeting) return false;
         return CheatToggles.mapCrew || CheatToggles.mapGhosts || CheatToggles.mapImps;
+    }
+
+    public static void RecordTrailPoints()
+    {
+        if (!CheatToggles.mapTrails && !CheatToggles.mapTrailsOnIngameMap) return;
+        if (!Utils.isShip || Utils.isMeeting) return;
+
+        foreach (var player in PlayerControl.AllPlayerControls)
+        {
+            if (player == null || player.Data == null) continue;
+
+            var id = player.PlayerId;
+            if (!_trails.ContainsKey(id)) _trails[id] = new List<Vector3>();
+
+            var pos = player.transform.position;
+            var trail = _trails[id];
+            if (trail.Count == 0 || Vector3.Distance(trail[trail.Count - 1], pos) > 0.15f)
+            {
+                if (trail.Count > 600) trail.RemoveAt(0);
+                trail.Add(pos);
+            }
+        }
+    }
+
+    public static void ClearTrails()
+    {
+        _trails.Clear();
+    }
+
+    public static Dictionary<byte, List<Vector3>> GetTrails() => _trails;
+
+    private static readonly Dictionary<byte, LineRenderer> _trailRenderers = new();
+
+    public static void RenderTrailsOnMap(MapBehaviour map)
+    {
+        if (!CheatToggles.mapTrailsOnIngameMap || map == null || ShipStatus.Instance == null) return;
+
+        var parent = map.HerePoint?.transform?.parent;
+        if (parent == null) return;
+
+        var mapScale = ShipStatus.Instance.MapScale;
+        var mapSign = Mathf.Sign(ShipStatus.Instance.transform.localScale.x);
+
+        foreach (var kvp in _trails)
+        {
+            var id = kvp.Key;
+            var points = kvp.Value;
+            if (points.Count < 2) continue;
+
+            if (!_trailRenderers.TryGetValue(id, out var lr) || lr == null)
+            {
+                var go = new GameObject($"MalumTrail_{id}");
+                go.transform.SetParent(parent, false);
+                go.transform.localPosition = Vector3.zero;
+                lr = go.AddComponent<LineRenderer>();
+                lr.useWorldSpace = false;
+                lr.widthMultiplier = 0.03f;
+                lr.numCapVertices = 2;
+                lr.numCornerVertices = 2;
+                lr.material = map.HerePoint.material;
+                lr.startColor = Color.white;
+                lr.endColor = Color.white;
+                _trailRenderers[id] = lr;
+            }
+
+            lr.positionCount = points.Count;
+            for (var i = 0; i < points.Count; i++)
+            {
+                var v = points[i];
+                v /= mapScale;
+                v.x *= mapSign;
+                v.z = -0.5f;
+                lr.SetPosition(i, v);
+            }
+        }
+
+        foreach (var id in new List<byte>(_trailRenderers.Keys))
+        {
+            if (!_trails.ContainsKey(id) && _trailRenderers.TryGetValue(id, out var lr) && lr != null)
+            {
+                Object.Destroy(lr.gameObject);
+                _trailRenderers.Remove(id);
+            }
+        }
+    }
+
+    public static void DestroyTrailRenderers()
+    {
+        foreach (var lr in _trailRenderers.Values)
+        {
+            if (lr != null) Object.Destroy(lr.gameObject);
+        }
+        _trailRenderers.Clear();
     }
 
     public static void HandleHerePoint(HerePoint herePoint)
