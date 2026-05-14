@@ -118,7 +118,7 @@ public partial class MalumMenu : BasePlugin
                                     0.25f,
                                     new ConfigDescription(
                                         "Delay (in seconds) before Auto-Open Doors triggers when using a door console.",
-                                        new AcceptableValueRange<float>(0f, 10f)
+                                        new AcceptableValueRange<float>(0f, 5f)
                                     ));
 
             sabotageCooldownReductionPercent = Config.Bind("MalumMenu.Ship",
