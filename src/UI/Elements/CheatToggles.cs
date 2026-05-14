@@ -18,7 +18,6 @@ public struct CheatToggles
     public static bool setFakeRole;
     public static bool setFakeAlive;
     public static bool noKillCd;
-    public static bool showTasksMenu;
     public static bool completeMyTasks;
     public static bool impostorTasks;
     public static bool killReach;
@@ -58,6 +57,11 @@ public struct CheatToggles
     public static bool mapImps;
     public static bool mapGhosts;
     public static bool colorBasedMap;
+    public static bool mapImpsHighlight;
+    public static bool mapTrails;
+    public static bool minimapAlwaysOn;
+    public static bool debugMinimap;
+    public static bool minimapDoorSabotage;
 
     // Tracers
     public static bool tracersImps;
@@ -81,6 +85,8 @@ public struct CheatToggles
     public static bool unfixableLights;
     public static bool callMeeting;
     public static bool reportBody;
+    public static bool noSabotageCooldown;
+    public static bool noDoorCooldown;
 
     // Sabotage
     public static bool commsSab;
@@ -144,6 +150,7 @@ public struct CheatToggles
     public static bool forceRole;
     public static RoleTypes? forcedRole;
     public static bool showRolesMenu;
+    public static bool hostAlwaysImpostor;
     public static bool skipMeeting;
     public static bool forceStartGame;
     public static bool noGameEnd;
@@ -162,6 +169,16 @@ public struct CheatToggles
     public static bool avoidPenalties;
     public static bool copyLobbyCodeOnDisconnect;
     public static bool spoofAprilFoolsDate;
+    public static bool antiCrashProtection;
+    public static bool antiCrashPopups;
+    public static bool autoBanCrashers;
+    public static bool showTasksMenu;
+    public static bool autoTaskOnOpen;
+    public static bool autoTaskUseBestTime;
+    public static bool autoTaskShowProgress = true;
+    public static bool recordTaskTimes;
+    public static bool debugTaskAutomation;
+    public static bool minimapHideDuringMeeting = true;
 
     // Modes
     public static bool rgbMode;
@@ -179,6 +196,8 @@ public struct CheatToggles
 
     // Map for Reflection Access: Toggle Name -> FieldInfo
     public static readonly Dictionary<string, FieldInfo> ToggleFields = new();
+
+    public static readonly string ProfilePath = Path.Combine(BepInEx.Paths.ConfigPath, "MalumProfile.txt");
 
     // Populate reflection map once at startup and initialize Keybinds with KeyCode.None
     static CheatToggles()
@@ -225,7 +244,7 @@ public struct CheatToggles
     // Format per line: ToggleName = True/False = KeyCode.KEY
     public static void SaveTogglesToProfile()
     {
-        using var writer = new StreamWriter(MalumMenu.ProfilePath);
+        using var writer = new StreamWriter(ProfilePath);
 
         writer.WriteLine("# MalumProfile");
         writer.WriteLine("# Format: ToggleName = True/False = KeyCode.KEY");
@@ -246,9 +265,9 @@ public struct CheatToggles
     // Format per line: ToggleName = True/False = KeyCode.KEY
     public static void LoadTogglesFromProfile()
     {
-        if (!File.Exists(MalumMenu.ProfilePath)) return;
+        if (!File.Exists(ProfilePath)) return;
 
-        using var reader = new StreamReader(MalumMenu.ProfilePath);
+        using var reader = new StreamReader(ProfilePath);
 
         while (reader.ReadLine() is { } line)
         {

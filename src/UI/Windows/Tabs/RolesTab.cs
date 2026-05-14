@@ -62,7 +62,7 @@ public class RolesTab : ITab
 
         CheatToggles.killReach = GUILayout.Toggle(CheatToggles.killReach, " Kill Reach");
 
-        CheatToggles.impostorTasks = GUILayout.Toggle(CheatToggles.impostorTasks, " Allow Fake Tasks");
+        // CheatToggles.impostorTasks = GUILayout.Toggle(CheatToggles.impostorTasks, " Allow Tasks");
     }
 
     private void DrawShapeshifter()
