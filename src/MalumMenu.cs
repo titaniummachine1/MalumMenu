@@ -27,7 +27,6 @@ public partial class MalumMenu : BasePlugin
     public static TasksUI tasksUI;
     public static ProtectUI protectUI;
     public static KeybindListener keybindListener;
-    public static TaskAutomationController taskAutomationController;
 
     public static string malumVersion = "3.1.0";
     public static List<string> supportedAU = new List<string> { "2026.3.31" };
@@ -46,7 +45,6 @@ public partial class MalumMenu : BasePlugin
     public static ConfigEntry<bool> guestMode;
     public static ConfigEntry<bool> autoLoadProfile;
     public static ConfigEntry<string> configEditor;
-    public static ConfigEntry<float> autoTaskDefaultSeconds;
     public static ConfigEntry<float> autoDoorOpenDelaySeconds;
     public static ConfigEntry<float> sabotageCooldownReductionPercent;
     public static ConfigEntry<float> doorCooldownReductionPercent;
@@ -105,14 +103,6 @@ public partial class MalumMenu : BasePlugin
                                     "notepad.exe",
                                     "The program used to open the config file when using the Open Config toggle. Can be any executable, but using a text editor is recommended");
 
-            autoTaskDefaultSeconds = Config.Bind("MalumMenu.Tasks",
-                                    "AutoTaskDefaultSeconds",
-                                10f,
-                                    new ConfigDescription(
-                                        "Default duration (in seconds) used by Auto-Complete On Open when no best time exists.",
-                                        new AcceptableValueRange<float>(0.1f, 10f)
-                                    ));
-
             autoDoorOpenDelaySeconds = Config.Bind("MalumMenu.Ship",
                                     "AutoDoorOpenDelaySeconds",
                                     0.25f,
@@ -147,7 +137,7 @@ public partial class MalumMenu : BasePlugin
 
             minimapScale = Config.Bind("MalumMenu.Minimap",
                                     "AlwaysOnScale",
-                                    Radar.scale,
+                                    0.3f,
                                     new ConfigDescription(
                                         "Scale of the always-on minimap window.",
                                         new AcceptableValueRange<float>(0.15f, 0.75f)
@@ -155,12 +145,12 @@ public partial class MalumMenu : BasePlugin
 
             minimapPosX = Config.Bind("MalumMenu.Minimap",
                                     "AlwaysOnPosX",
-                                    Radar.anchoredPosition.x,
+                                    100f,
                                     "Anchored X position of the always-on minimap window.");
 
             minimapPosY = Config.Bind("MalumMenu.Minimap",
                                     "AlwaysOnPosY",
-                                    Radar.anchoredPosition.y,
+                                    100f,
                                     "Anchored Y position of the always-on minimap window.");
 
             minimapBgBan = Config.Bind("MalumMenu.Minimap",
@@ -291,25 +281,6 @@ public partial class MalumMenu : BasePlugin
                 Log.LogWarning($"Unable to enumerate patched methods: {ex.GetType().Name}");
             }
 
-            try
-            {
-                Log.LogInfo($"AntiCrash: {AntiCrashLimiter.GetDiagnosticsSummary()}");
-            }
-            catch (Exception ex)
-            {
-                Log.LogWarning($"AntiCrash diagnostics failed: {ex.GetType().Name}");
-            }
-
-            try
-            {
-                TaskTimeStore.Load();
-                Log.LogInfo("TaskTimeStore loaded");
-            }
-            catch (Exception ex)
-            {
-                Log.LogWarning($"TaskTimeStore load failed: {ex.GetType().Name}");
-            }
-
             // UI
             menuUI = AddComponent<MenuUI>();
             consoleUI = AddComponent<ConsoleUI>();
@@ -321,12 +292,6 @@ public partial class MalumMenu : BasePlugin
 
             // Components
             keybindListener = AddComponent<KeybindListener>();
-            taskAutomationController = AddComponent<TaskAutomationController>();
-            AddComponent<Radar>();
-            AddComponent<TrailRecorderController>();
-
-            Radar.scale = minimapScale.Value;
-            Radar.anchoredPosition = new Vector2(minimapPosX.Value, minimapPosY.Value);
 
             // Disables Telemetry (haven't fully tested if it works, but according to Unity docs it should)
             if (noTelemetry.Value)
