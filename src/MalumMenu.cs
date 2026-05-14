@@ -292,6 +292,11 @@ public partial class MalumMenu : BasePlugin
 
             // Components
             keybindListener = AddComponent<KeybindListener>();
+            AddComponent<Radar>();
+            AddComponent<TrailRecorderController>();
+
+            Radar.scale = minimapScale.Value;
+            Radar.anchoredPosition = new Vector2(minimapPosX.Value, minimapPosY.Value);
 
             // Disables Telemetry (haven't fully tested if it works, but according to Unity docs it should)
             if (noTelemetry.Value)

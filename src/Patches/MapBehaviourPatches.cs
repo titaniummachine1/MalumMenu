@@ -9,9 +9,9 @@ public static class MapBehaviour_ShowNormalMap
     // Postfix patch of MapBehaviour.ShowNormalMap to spawn herePoint icons for each player
     public static void Postfix(MapBehaviour __instance)
     {
-        MinimapHandler.minimapActive = MinimapHandler.IsCheatEnabled();
+        MapHandler.minimapActive = MapHandler.IsCheatEnabled();
 
-        if (!MinimapHandler.minimapActive)
+        if (!MapHandler.minimapActive)
         {
             return; // Only runs if miniMap Cheat is enabled
         }
@@ -23,8 +23,8 @@ public static class MapBehaviour_ShowNormalMap
         // Destroy old player icons (herePoints)
         try
         {
-            MinimapHandler.herePoints.ForEach(x => UnityEngine.Object.Destroy(x.sprite.gameObject));
-            MinimapHandler.herePoints.Clear();
+            MapHandler.herePoints.ForEach(x => UnityEngine.Object.Destroy(x.sprite.gameObject));
+            MapHandler.herePoints.Clear();
         }
         catch { }
 
@@ -39,8 +39,7 @@ public static class MapBehaviour_ShowNormalMap
                 temp.Add(new HerePoint(player, herePoint));
             }
         }
-        MinimapHandler.herePoints = temp;
-
+        MapHandler.herePoints = temp;
     }
 }
 
@@ -50,10 +49,8 @@ public static class MapBehaviour_FixedUpdate
     // Postfix patch of MapBehaviour.FixedUpdate to update each herePoint icon's color and position on the map based on their respective player
     public static void Postfix(MapBehaviour __instance)
     {
-        MinimapHandler.RecordTrailPoints();
-
         // Reset map if miniMap cheat is disabled
-        if (MinimapHandler.IsCheatEnabled() != MinimapHandler.minimapActive)
+        if (MapHandler.IsCheatEnabled() != MapHandler.minimapActive)
         {
             if (!__instance.infectedOverlay.gameObject.active) // Do not affect sabotage map
             {
@@ -62,18 +59,18 @@ public static class MapBehaviour_FixedUpdate
             }
         }
 
-        MinimapHandler.RenderTrailsOnMap(__instance);
+        MapHandler.HandleTrails(__instance);
 
         // Properly handles each herePoint icon on the map
-        var temp = MinimapHandler.herePoints;
+        var temp = MapHandler.herePoints;
         foreach (var herePoint in temp)
         {
-            MinimapHandler.HandleHerePoint(herePoint);
+            MapHandler.HandleHerePoint(herePoint);
         }
 
-        foreach (var herePoint in MinimapHandler.herePointsToRemove)
+        foreach (var herePoint in MapHandler.herePointsToRemove)
         {
-            MinimapHandler.herePoints.Remove(herePoint);
+            MapHandler.herePoints.Remove(herePoint);
         }
 
     }
@@ -87,11 +84,11 @@ public static class MapBehaviour_Close
     {
         try
         {
-            MinimapHandler.herePoints.ForEach(x => UnityEngine.Object.Destroy(x.sprite.gameObject));
-            MinimapHandler.herePoints.Clear();
+            MapHandler.herePoints.ForEach(x => UnityEngine.Object.Destroy(x.sprite.gameObject));
+            MapHandler.herePoints.Clear();
         }
         catch { }
 
-        MinimapHandler.DestroyTrailRenderers();
+        MapHandler.DetachTrailRenderers();
     }
 }

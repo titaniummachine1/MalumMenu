@@ -58,11 +58,11 @@ public struct CheatToggles
     public static bool mapGhosts;
     public static bool colorBasedMap;
 
-    // Minimap (overlay)
-    public static bool minimapCrew;
-    public static bool minimapImps;
-    public static bool minimapGhosts;
-    public static bool minimapColorBased;
+    // Radar (draggable overlay window)
+    public static bool radarCrew;
+    public static bool radarImps;
+    public static bool radarGhosts;
+    public static bool radarColorBased;
     public static bool mapImpsHighlight;
     public static bool mapTrails;
     public static float mapTrailDuration = 30f;

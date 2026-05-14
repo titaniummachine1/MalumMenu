@@ -109,9 +109,9 @@ public class ESPTab : ITab
 
     private void DrawMinimap()
     {
-        GUILayout.Label("Minimap", GUIStylePreset.TabSubtitle);
+        GUILayout.Label("Radar", GUIStylePreset.TabSubtitle);
 
-        CheatToggles.minimapAlwaysOn = GUILayout.Toggle(CheatToggles.minimapAlwaysOn, " Enable Minimap");
+        CheatToggles.minimapAlwaysOn = GUILayout.Toggle(CheatToggles.minimapAlwaysOn, " Enable Radar");
 
         var minimapArrow = _minimapShowExpanded ? "▼" : "▶";
         if (GUILayout.Button($"{minimapArrow} Show Options", GUIStylePreset.NormalButton))
@@ -121,13 +121,13 @@ public class ESPTab : ITab
 
         if (_minimapShowExpanded)
         {
-            CheatToggles.minimapCrew = GUILayout.Toggle(CheatToggles.minimapCrew, " Crewmates");
+            CheatToggles.radarCrew = GUILayout.Toggle(CheatToggles.radarCrew, " Crewmates");
 
-            CheatToggles.minimapImps = GUILayout.Toggle(CheatToggles.minimapImps, " Impostors");
+            CheatToggles.radarImps = GUILayout.Toggle(CheatToggles.radarImps, " Impostors");
 
-            CheatToggles.minimapGhosts = GUILayout.Toggle(CheatToggles.minimapGhosts, " Ghosts");
+            CheatToggles.radarGhosts = GUILayout.Toggle(CheatToggles.radarGhosts, " Ghosts");
 
-            CheatToggles.minimapColorBased = GUILayout.Toggle(CheatToggles.minimapColorBased, " Color-based");
+            CheatToggles.radarColorBased = GUILayout.Toggle(CheatToggles.radarColorBased, " Color-based");
         }
 
         CheatToggles.mapTrails = GUILayout.Toggle(CheatToggles.mapTrails, " Enable Trails");
