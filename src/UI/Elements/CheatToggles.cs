@@ -52,11 +52,17 @@ public struct CheatToggles
     public static bool zoomOut;
     public static bool freecam;
 
-    // Minimap
+    // Map (ingame M-key map icons)
     public static bool mapCrew;
     public static bool mapImps;
     public static bool mapGhosts;
     public static bool colorBasedMap;
+
+    // Minimap (overlay)
+    public static bool minimapCrew;
+    public static bool minimapImps;
+    public static bool minimapGhosts;
+    public static bool minimapColorBased;
     public static bool mapImpsHighlight;
     public static bool mapTrails;
     public static float mapTrailDuration = 30f;

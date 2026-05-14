@@ -6,6 +6,9 @@ public class ESPTab : ITab
 {
     public string name => "ESP";
 
+    private bool _mapShowExpanded;
+    private bool _minimapShowExpanded;
+
     public void Draw()
     {
         GUILayout.BeginHorizontal();
@@ -86,13 +89,22 @@ public class ESPTab : ITab
     {
         GUILayout.Label("Map", GUIStylePreset.TabSubtitle);
 
-        CheatToggles.mapCrew = GUILayout.Toggle(CheatToggles.mapCrew, " Crewmates");
+        var mapArrow = _mapShowExpanded ? "▼" : "▶";
+        if (GUILayout.Button($"{mapArrow} Show Options", GUIStylePreset.NormalButton))
+        {
+            _mapShowExpanded = !_mapShowExpanded;
+        }
 
-        CheatToggles.mapImps = GUILayout.Toggle(CheatToggles.mapImps, " Impostors");
+        if (_mapShowExpanded)
+        {
+            CheatToggles.mapCrew = GUILayout.Toggle(CheatToggles.mapCrew, " Crewmates");
 
-        CheatToggles.mapGhosts = GUILayout.Toggle(CheatToggles.mapGhosts, " Ghosts");
+            CheatToggles.mapImps = GUILayout.Toggle(CheatToggles.mapImps, " Impostors");
 
-        CheatToggles.colorBasedMap = GUILayout.Toggle(CheatToggles.colorBasedMap, " Color-based");
+            CheatToggles.mapGhosts = GUILayout.Toggle(CheatToggles.mapGhosts, " Ghosts");
+
+            CheatToggles.colorBasedMap = GUILayout.Toggle(CheatToggles.colorBasedMap, " Color-based");
+        }
     }
 
     private void DrawMinimap()
@@ -100,6 +112,23 @@ public class ESPTab : ITab
         GUILayout.Label("Minimap", GUIStylePreset.TabSubtitle);
 
         CheatToggles.minimapAlwaysOn = GUILayout.Toggle(CheatToggles.minimapAlwaysOn, " Enable Minimap");
+
+        var minimapArrow = _minimapShowExpanded ? "▼" : "▶";
+        if (GUILayout.Button($"{minimapArrow} Show Options", GUIStylePreset.NormalButton))
+        {
+            _minimapShowExpanded = !_minimapShowExpanded;
+        }
+
+        if (_minimapShowExpanded)
+        {
+            CheatToggles.minimapCrew = GUILayout.Toggle(CheatToggles.minimapCrew, " Crewmates");
+
+            CheatToggles.minimapImps = GUILayout.Toggle(CheatToggles.minimapImps, " Impostors");
+
+            CheatToggles.minimapGhosts = GUILayout.Toggle(CheatToggles.minimapGhosts, " Ghosts");
+
+            CheatToggles.minimapColorBased = GUILayout.Toggle(CheatToggles.minimapColorBased, " Color-based");
+        }
 
         CheatToggles.mapTrails = GUILayout.Toggle(CheatToggles.mapTrails, " Enable Trails");
 

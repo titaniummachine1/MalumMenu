@@ -14,7 +14,8 @@ public static class MinimapHandler
     public static bool IsCheatEnabled()
     {
         if (CheatToggles.minimapHideDuringMeeting && Utils.isMeeting) return false;
-        return CheatToggles.mapCrew || CheatToggles.mapGhosts || CheatToggles.mapImps;
+        return CheatToggles.mapCrew || CheatToggles.mapGhosts || CheatToggles.mapImps
+            || CheatToggles.minimapCrew || CheatToggles.minimapGhosts || CheatToggles.minimapImps;
     }
 
     public static void RecordTrailPoints()
@@ -135,12 +136,12 @@ public static class MinimapHandler
             herePoint.sprite.gameObject.SetActive(false); // Initally make player icon invisible
 
             // Crewmate, alive
-            if (CheatToggles.mapCrew && !herePoint.player.Data.Role.IsImpostor)
+            if (CheatToggles.minimapCrew && !herePoint.player.Data.Role.IsImpostor)
             {
                 if (!herePoint.player.Data.IsDead)
                 {
                     herePoint.sprite.gameObject.SetActive(true);
-                    if (CheatToggles.colorBasedMap)
+                    if (CheatToggles.minimapColorBased)
                     {
                         herePointColor = herePoint.player.Data.Color; // Color-Based Icon
                     }
@@ -151,12 +152,12 @@ public static class MinimapHandler
                 }
             }
             // Impostor, alive
-            else if (CheatToggles.mapImps && herePoint.player.Data.Role.IsImpostor)
+            else if (CheatToggles.minimapImps && herePoint.player.Data.Role.IsImpostor)
             {
                 if (!herePoint.player.Data.IsDead)
                 {
                     herePoint.sprite.gameObject.SetActive(true);
-                    if (CheatToggles.colorBasedMap)
+                    if (CheatToggles.minimapColorBased)
                     {
                         herePointColor = herePoint.player.Data.Color; // Color-Based Icon
                     }
@@ -167,10 +168,10 @@ public static class MinimapHandler
                 }
             }
             // Any Role, dead
-            if (CheatToggles.mapGhosts && herePoint.player.Data.IsDead)
+            if (CheatToggles.minimapGhosts && herePoint.player.Data.IsDead)
             {
                 herePoint.sprite.gameObject.SetActive(true);
-                if (CheatToggles.colorBasedMap)
+                if (CheatToggles.minimapColorBased)
                 {
                     herePointColor = herePoint.player.Data.Color; // Color-Based Icon
                 }
