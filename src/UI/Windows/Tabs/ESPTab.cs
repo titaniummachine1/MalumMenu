@@ -18,11 +18,15 @@ public class ESPTab : ITab
 
         DrawCamera();
 
+        GUILayout.Space(15);
+
+        DrawTracers();
+
         GUILayout.EndVertical();
 
         GUILayout.BeginVertical();
 
-        DrawTracers();
+        DrawMap();
 
         GUILayout.Space(15);
 
@@ -78,11 +82,9 @@ public class ESPTab : ITab
         CheatToggles.distanceBasedTracers = GUILayout.Toggle(CheatToggles.distanceBasedTracers, " Distance-based");
     }
 
-    private void DrawMinimap()
+    private void DrawMap()
     {
-        GUILayout.Label("Minimap", GUIStylePreset.TabSubtitle);
-
-        CheatToggles.minimapAlwaysOn = GUILayout.Toggle(CheatToggles.minimapAlwaysOn, " Enable Minimap");
+        GUILayout.Label("Map", GUIStylePreset.TabSubtitle);
 
         CheatToggles.mapCrew = GUILayout.Toggle(CheatToggles.mapCrew, " Crewmates");
 
@@ -91,8 +93,21 @@ public class ESPTab : ITab
         CheatToggles.mapGhosts = GUILayout.Toggle(CheatToggles.mapGhosts, " Ghosts");
 
         CheatToggles.colorBasedMap = GUILayout.Toggle(CheatToggles.colorBasedMap, " Color-based");
+    }
+
+    private void DrawMinimap()
+    {
+        GUILayout.Label("Minimap", GUIStylePreset.TabSubtitle);
+
+        CheatToggles.minimapAlwaysOn = GUILayout.Toggle(CheatToggles.minimapAlwaysOn, " Enable Minimap");
 
         CheatToggles.mapTrails = GUILayout.Toggle(CheatToggles.mapTrails, " Enable Trails");
+
+        if (CheatToggles.mapTrails)
+        {
+            GUILayout.Label($" Trail Duration: {CheatToggles.mapTrailDuration:0}s");
+            CheatToggles.mapTrailDuration = GUILayout.HorizontalSlider(CheatToggles.mapTrailDuration, 5f, 120f);
+        }
 
         CheatToggles.minimapHideDuringMeeting = GUILayout.Toggle(CheatToggles.minimapHideDuringMeeting, " Hide During Meeting");
 

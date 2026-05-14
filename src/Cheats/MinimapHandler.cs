@@ -9,6 +9,7 @@ public static class MinimapHandler
     public static List<HerePoint> herePointsToRemove = new List<HerePoint>();
 
     private static readonly Dictionary<byte, List<Vector3>> _trails = new();
+    private static readonly Dictionary<byte, List<float>> _trailTimes = new();
 
     public static bool IsCheatEnabled()
     {
@@ -21,19 +22,34 @@ public static class MinimapHandler
         if (!CheatToggles.mapTrails && !CheatToggles.mapTrailsOnIngameMap) return;
         if (!Utils.isShip || Utils.isMeeting) return;
 
+        var now = Time.time;
+        var maxAge = Mathf.Max(CheatToggles.mapTrailDuration, 5f);
+
         foreach (var player in PlayerControl.AllPlayerControls)
         {
             if (player == null || player.Data == null) continue;
 
             var id = player.PlayerId;
-            if (!_trails.ContainsKey(id)) _trails[id] = new List<Vector3>();
+            if (!_trails.ContainsKey(id))
+            {
+                _trails[id] = new List<Vector3>();
+                _trailTimes[id] = new List<float>();
+            }
 
             var pos = player.transform.position;
             var trail = _trails[id];
+            var times = _trailTimes[id];
+
             if (trail.Count == 0 || Vector3.Distance(trail[trail.Count - 1], pos) > 0.15f)
             {
-                if (trail.Count > 600) trail.RemoveAt(0);
                 trail.Add(pos);
+                times.Add(now);
+            }
+
+            while (times.Count > 0 && now - times[0] > maxAge)
+            {
+                trail.RemoveAt(0);
+                times.RemoveAt(0);
             }
         }
     }
@@ -41,6 +57,7 @@ public static class MinimapHandler
     public static void ClearTrails()
     {
         _trails.Clear();
+        _trailTimes.Clear();
     }
 
     public static Dictionary<byte, List<Vector3>> GetTrails() => _trails;

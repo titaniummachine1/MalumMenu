@@ -59,6 +59,7 @@ public struct CheatToggles
     public static bool colorBasedMap;
     public static bool mapImpsHighlight;
     public static bool mapTrails;
+    public static float mapTrailDuration = 30f;
     public static bool mapTrailsOnIngameMap;
     public static bool minimapAlwaysOn;
     public static bool debugMinimap;
