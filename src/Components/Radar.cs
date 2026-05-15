@@ -1031,7 +1031,7 @@ public sealed class Radar : MonoBehaviour
 
     private void RefreshTemplate()
     {
-        var template = MapBehaviour.Instance;
+        var template = MapBehaviour.Instance ?? Object.FindObjectOfType<MapBehaviour>(true);
         if (template == null)
         {
             if (_template != null) return;
