@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System;
 using UnityEngine;
 using UnityEngine.UI;
@@ -23,8 +23,9 @@ public sealed class Radar : MonoBehaviour
     private const int TrailMaxWaypoints = 256;
     private const float TrailWaypointIntervalSeconds = 0.25f;
     private const int TrailMaxSegments = 128;
-    private const float TrailAlphaStart = 0.85f;
-    private const float TrailAlphaEnd = 0.60f;
+    private const float TrailAlphaStart = 1f;
+    private const float TrailAlphaEnd = 0f;
+    private const float TrailFadeStart = 0.75f;
     private const int MeetingFreezeStepsBack = 1;
 
     private static Sprite _fallbackSprite;
@@ -607,7 +608,7 @@ public sealed class Radar : MonoBehaviour
 
             var age = now - toTime;
             var t = keepSeconds > 0.001f ? Mathf.Clamp01(age / keepSeconds) : 1f;
-            var alpha = Mathf.Lerp(TrailAlphaStart, TrailAlphaEnd, t);
+            var alpha = ResolveTrailAlpha(t);
 
             var invParentScaleY = 1f;
             try
@@ -664,14 +665,6 @@ public sealed class Radar : MonoBehaviour
         else if (!mapOpen && _wasMapOpen)
         {
             _wasMapOpen = false;
-        }
-
-        if (!Utils.isInGame && !mapOpen)
-        {
-            SetVisible(false);
-            SetBigMapOverlayVisible(false);
-            _dragging = false;
-            return;
         }
 
         if (!CheatToggles.minimapAlwaysOn && !mapOpen)
@@ -757,6 +750,7 @@ public sealed class Radar : MonoBehaviour
         var size = BaseSizeAtDefaultScale * (s / DefaultScale);
         if (size < 64f) size = 64f;
 
+        ClampAnchoredPosition(size);
         _window.sizeDelta = new Vector2(size, size);
         _window.anchoredPosition = anchoredPosition;
         _borderRoot.gameObject.SetActive(MenuUI.isGUIActive);
@@ -933,6 +927,26 @@ public sealed class Radar : MonoBehaviour
         if (sf < 0.0001f) sf = 1f;
         var delta = (Vector2)Input.mousePosition - _dragStartMouse;
         anchoredPosition = _dragStartAnchored + (delta / sf);
+    }
+
+    private static float ResolveTrailAlpha(float normalizedAge)
+    {
+        if (normalizedAge <= TrailFadeStart) return TrailAlphaStart;
+        var fade = Mathf.InverseLerp(TrailFadeStart, 1f, normalizedAge);
+        return Mathf.Lerp(TrailAlphaStart, TrailAlphaEnd, fade);
+    }
+
+    private static void ClampAnchoredPosition(float size)
+    {
+        var halfWidth = Screen.width * 0.5f;
+        var halfHeight = Screen.height * 0.5f;
+        if (halfWidth <= 0f || halfHeight <= 0f) return;
+
+        var margin = Mathf.Max(32f, size * 0.5f);
+        anchoredPosition = new Vector2(
+            Mathf.Clamp(anchoredPosition.x, -halfWidth + margin, halfWidth - margin),
+            Mathf.Clamp(anchoredPosition.y, -halfHeight + margin, halfHeight - margin)
+        );
     }
 
     // Converts a screen-space mouse position to map-local coordinates (inverse of TryMapLocalToAnchored).
@@ -1959,7 +1973,7 @@ public sealed class Radar : MonoBehaviour
         if (_trailsRoot == null) return;
 
         var meeting = _wasMeeting;
-        if (!CheatToggles.mapTrails || (!Utils.isInGame && !meeting) || !Utils.isShip || ShipStatus.Instance == null)
+        if (!CheatToggles.mapTrails || (!Utils.isPlayer && !meeting) || !Utils.isShip || ShipStatus.Instance == null)
         {
             ClearTrails();
             return;
@@ -2148,7 +2162,7 @@ public sealed class Radar : MonoBehaviour
             var seg = trail.segments[i];
             var age = now - toTime;
             var t = keepSeconds > 0.001f ? Mathf.Clamp01(age / keepSeconds) : 1f;
-            var alpha = Mathf.Lerp(TrailAlphaStart, TrailAlphaEnd, t);
+            var alpha = ResolveTrailAlpha(t);
             seg.color = new Color(trail.color.r, trail.color.g, trail.color.b, alpha);
             var rt = seg.rectTransform;
             rt.anchoredPosition = mid;
