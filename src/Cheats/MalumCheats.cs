@@ -322,8 +322,15 @@ public static class MalumCheats
         if (!CheatToggles.teleportCursor) return;
 
         // Teleport player to cursor's in-world position on right-click
+        // Skip if clicking inside the radar window to avoid accidental teleports.
         if (Input.GetMouseButtonDown(1))
         {
+            var radarWindow = Radar.GetWindow();
+            if (radarWindow != null && RectTransformUtility.RectangleContainsScreenPoint(radarWindow, Input.mousePosition, null))
+            {
+                return;
+            }
+
             PlayerControl.LocalPlayer.NetTransform.RpcSnapTo(Camera.main.ScreenToWorldPoint(Input.mousePosition));
         }
     }

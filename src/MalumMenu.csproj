@@ -9,9 +9,10 @@
         <Authors>scp222thj, astra1dev</Authors>
     </PropertyGroup>
 
-    <!--<ItemGroup>
-        <EmbeddedResource Include=".\Assets\**" />
-    </ItemGroup>-->
+    <ItemGroup>
+        <EmbeddedResource Include=".\Resources\Maps\*.png" />
+        <EmbeddedResource Include=".\Resources\*.png" />
+    </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="BepInEx.Unity.IL2CPP" Version="6.0.0-be.735" Private="false" ExcludeAssets="runtime;native" />

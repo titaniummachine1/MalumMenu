@@ -53,11 +53,15 @@ public struct CheatToggles
     public static bool zoomOut;
     public static bool freecam;
 
-    // Minimap
-    public static bool mapCrew;
-    public static bool mapImps;
-    public static bool mapGhosts;
-    public static bool colorBasedMap;
+    // Radar (minimap + big map overlay)
+    public static bool radarCrew;
+    public static bool radarImps;
+    public static bool radarGhosts;
+    public static bool radarColorBased;
+    public static bool mapTrails;
+    public static float mapTrailDuration = 20f;
+    public static bool minimapAlwaysOn;
+    public static bool minimapHideDuringMeeting = true;
 
     // Tracers
     public static bool tracersImps;

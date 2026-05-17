@@ -10,6 +10,7 @@ public class ESPTab : ITab
     {
         GUILayout.BeginHorizontal();
 
+        // Left column: General, Camera, Tracers
         GUILayout.BeginVertical(GUILayout.Width(MenuUI.windowWidth * 0.425f));
 
         DrawGeneral();
@@ -18,15 +19,16 @@ public class ESPTab : ITab
 
         DrawCamera();
 
-        GUILayout.EndVertical();
-
-        GUILayout.BeginVertical();
+        GUILayout.Space(15);
 
         DrawTracers();
 
-        GUILayout.Space(15);
+        GUILayout.EndVertical();
 
-        DrawMinimap();
+        // Right column: Radar
+        GUILayout.BeginVertical();
+
+        DrawRadar();
 
         GUILayout.EndVertical();
 
@@ -78,16 +80,37 @@ public class ESPTab : ITab
         CheatToggles.distanceBasedTracers = GUILayout.Toggle(CheatToggles.distanceBasedTracers, " Distance-based");
     }
 
-    private void DrawMinimap()
+    private void DrawRadar()
     {
-        GUILayout.Label("Minimap", GUIStylePreset.TabSubtitle);
+        GUILayout.Label("Radar", GUIStylePreset.TabSubtitle);
 
-        CheatToggles.mapCrew = GUILayout.Toggle(CheatToggles.mapCrew, " Crewmates");
+        CheatToggles.minimapAlwaysOn = GUILayout.Toggle(CheatToggles.minimapAlwaysOn, " Enable Radar");
 
-        CheatToggles.mapImps = GUILayout.Toggle(CheatToggles.mapImps, " Impostors");
+        if (CheatToggles.minimapAlwaysOn)
+        {
+            CheatToggles.radarCrew = GUILayout.Toggle(CheatToggles.radarCrew, " Crewmates");
 
-        CheatToggles.mapGhosts = GUILayout.Toggle(CheatToggles.mapGhosts, " Ghosts");
+            CheatToggles.radarImps = GUILayout.Toggle(CheatToggles.radarImps, " Impostors");
 
-        CheatToggles.colorBasedMap = GUILayout.Toggle(CheatToggles.colorBasedMap, " Color-based");
+            CheatToggles.radarGhosts = GUILayout.Toggle(CheatToggles.radarGhosts, " Ghosts");
+
+            CheatToggles.radarColorBased = GUILayout.Toggle(CheatToggles.radarColorBased, " Color-based");
+
+            CheatToggles.mapTrails = GUILayout.Toggle(CheatToggles.mapTrails, " Show Trails");
+
+            if (CheatToggles.mapTrails)
+            {
+                GUILayout.Label($"Trail Duration: {CheatToggles.mapTrailDuration:F0}s", GUIStylePreset.TabSubtitle);
+                CheatToggles.mapTrailDuration = GUILayout.HorizontalSlider(CheatToggles.mapTrailDuration, 5f, 60f);
+            }
+        }
+
+        CheatToggles.minimapHideDuringMeeting = GUILayout.Toggle(CheatToggles.minimapHideDuringMeeting, " Hide During Meeting");
+
+        var offset = Mathf.RoundToInt(Radar.scaleOffsetPercent);
+        GUILayout.Label($"Size: {(offset >= 0 ? "+" : "")}{offset}%", GUIStylePreset.TabSubtitle);
+        Radar.scaleOffsetPercent = GUILayout.HorizontalSlider(Radar.scaleOffsetPercent, -40f, 200f, GUILayout.Width(MenuUI.windowWidth * 0.25f));
+        Radar.scale = Mathf.Clamp(Radar.baseScale * (1f + (Radar.scaleOffsetPercent - 80f) / 100f), Radar.MinScale, Radar.MaxScale);
     }
+
 }

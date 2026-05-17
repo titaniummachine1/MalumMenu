@@ -54,6 +54,12 @@ public partial class MalumMenu : BasePlugin
     public static ConfigEntry<float> defaultCooldown;
     public static ConfigEntry<int> killSwitchLvl;
 
+    public static ConfigEntry<float> minimapScale;
+    public static ConfigEntry<float> minimapPosX;
+    public static ConfigEntry<float> minimapPosY;
+    public static ConfigEntry<string> minimapBgBan;
+    public static ConfigEntry<float> minimapIconScale;
+
     public override void Load()
     {
         Log = base.Log;
@@ -167,6 +173,37 @@ public partial class MalumMenu : BasePlugin
                                     new AcceptableValueRange<int>(1, 6)
                                 ));
 
+        minimapScale = Config.Bind("MalumMenu.Minimap",
+                                "AlwaysOnScale",
+                                0.3f,
+                                new ConfigDescription(
+                                    "Scale of the always-on minimap window.",
+                                    new AcceptableValueRange<float>(Radar.MinScale, Radar.MaxScale)
+                                ));
+
+        minimapPosX = Config.Bind("MalumMenu.Minimap",
+                                "AlwaysOnPosX",
+                                -940f,
+                                "Bottom-left X position of the always-on minimap window (reference resolution 1920x1080).");
+
+        minimapPosY = Config.Bind("MalumMenu.Minimap",
+                                "AlwaysOnPosY",
+                                -520f,
+                                "Bottom-left Y position of the always-on minimap window (reference resolution 1920x1080).");
+
+        minimapBgBan = Config.Bind("MalumMenu.Minimap",
+                                "BackgroundBan",
+                            "task,fadedbackground,square",
+                                "Comma/space separated list of substrings. If the chosen minimap background SpriteRenderer's GameObject name or Sprite name contains any token, it will be skipped.");
+
+        minimapIconScale = Config.Bind("MalumMenu.Minimap",
+                                "IconScale",
+                                1f,
+                                new ConfigDescription(
+                                    "Scale multiplier for player/body icons in the always-on minimap window.",
+                                    new AcceptableValueRange<float>(0.50f, 2.50f)
+                                ));
+
         // Enabled by default
         CheatToggles.unlockFeatures = true;
         CheatToggles.freeCosmetics = true;
@@ -195,6 +232,12 @@ public partial class MalumMenu : BasePlugin
 
         // Components
         keybindListener = AddComponent<KeybindListener>();
+        AddComponent<Radar>();
+
+        Radar.baseScale = Mathf.Clamp(minimapScale.Value, Radar.MinScale, Radar.MaxScale);
+        Radar.scaleOffsetPercent = 80f;
+        Radar.scale = Mathf.Clamp(Radar.baseScale * (1f + (Radar.scaleOffsetPercent - 80f) / 100f), Radar.MinScale, Radar.MaxScale);
+        Radar.anchoredPosition = new Vector2(minimapPosX.Value, minimapPosY.Value);
 
         // Disables Telemetry (haven't fully tested if it works, but according to Unity docs it should)
         if (noTelemetry.Value)
