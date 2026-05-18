@@ -762,7 +762,7 @@ public sealed class Radar : MonoBehaviour
             if (_background != null) _background.texture = null;
             _bgTex = null;
             _dragging = false;
-            return;
+            // Don't return early - allow icons to render even without ship
         }
 
         var map = MapBehaviour.Instance;
@@ -1986,12 +1986,8 @@ public sealed class Radar : MonoBehaviour
             return;
         }
 
-        if (!Utils.isShip || ShipStatus.Instance == null)
-        {
-            if (ui.dot != null) ui.dot.enabled = false;
-            if (ui.highlight != null) ui.highlight.enabled = false;
-            return;
-        }
+        // Don't disable icons when not on ship - allow embedded icons to render
+        // Icons will be positioned correctly when on ship, but can still use embedded sprites
 
         if (_iconSprite != null)
         {
