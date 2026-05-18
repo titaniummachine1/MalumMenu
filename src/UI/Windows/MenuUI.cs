@@ -93,6 +93,11 @@ public class MenuUI : MonoBehaviour
         if (CheatToggles.reloadConfig)
         {
             MalumMenu.Plugin.Config.Reload();
+            // Re-apply radar config values after reload
+            Radar.baseScale = Mathf.Clamp(MalumMenu.minimapScale.Value, Radar.MinScale, Radar.MaxScale);
+            Radar.scaleOffsetPercent = 80f;
+            Radar.scale = Mathf.Clamp(Radar.baseScale * (1f + (Radar.scaleOffsetPercent - 80f) / 100f), Radar.MinScale, Radar.MaxScale);
+            Radar.anchoredPosition = new Vector2(MalumMenu.minimapPosX.Value, MalumMenu.minimapPosY.Value);
             CheatToggles.reloadConfig = false;
         }
 
