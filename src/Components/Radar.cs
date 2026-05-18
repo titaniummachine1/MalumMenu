@@ -1711,12 +1711,12 @@ public sealed class Radar : MonoBehaviour
             _background.texture = _bgTex;
             _background.uvRect = _bgUv;
             _background.color = new Color(1f, 1f, 1f, 0.95f);
+            _background.enabled = true;
         }
         else
         {
-            _background.texture = null;
-            _background.uvRect = new Rect(0f, 0f, 1f, 1f);
-            _background.color = new Color(0f, 0f, 0f, 0.35f);
+            // Don't draw background if texture is missing
+            _background.enabled = false;
         }
     }
 
