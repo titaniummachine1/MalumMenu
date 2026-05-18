@@ -10,6 +10,6 @@ public static class MapBehaviour_ShowNormalMap
         if (!CheatToggles.minimapAlwaysOn) return;
 
         __instance.ColorControl.SetColor(Palette.Purple);
-        __instance.DisableTrackerOverlays();
+        // Don't disable tracker overlays - allow radar and minimap ESP to work independently
     }
 }

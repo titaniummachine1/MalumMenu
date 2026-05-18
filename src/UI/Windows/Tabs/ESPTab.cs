@@ -96,6 +96,8 @@ public class ESPTab : ITab
 
             CheatToggles.radarColorBased = GUILayout.Toggle(CheatToggles.radarColorBased, " Color-based");
 
+            CheatToggles.radarShowTasks = GUILayout.Toggle(CheatToggles.radarShowTasks, " Show Tasks");
+
             CheatToggles.mapTrails = GUILayout.Toggle(CheatToggles.mapTrails, " Show Trails");
 
             if (CheatToggles.mapTrails)
@@ -109,7 +111,7 @@ public class ESPTab : ITab
 
         var offset = Mathf.RoundToInt(Radar.scaleOffsetPercent);
         GUILayout.Label($"Size: {(offset >= 0 ? "+" : "")}{offset}%", GUIStylePreset.TabSubtitle);
-        Radar.scaleOffsetPercent = GUILayout.HorizontalSlider(Radar.scaleOffsetPercent, -40f, 200f, GUILayout.Width(MenuUI.windowWidth * 0.25f));
+        Radar.scaleOffsetPercent = GUILayout.HorizontalSlider(Radar.scaleOffsetPercent, -80f, 800f, GUILayout.Width(MenuUI.windowWidth * 0.25f));
         Radar.scale = Mathf.Clamp(Radar.baseScale * (1f + (Radar.scaleOffsetPercent - 80f) / 100f), Radar.MinScale, Radar.MaxScale);
     }
 

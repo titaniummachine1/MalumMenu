@@ -106,8 +106,8 @@ public sealed class Radar : MonoBehaviour
         }
     }
 
-    public const float MinScale = 0.05f;
-    public const float MaxScale = 1.5f;
+    public const float MinScale = 0.1f;
+    public const float MaxScale = 3.0f;
     private const float BaseSizeAtDefaultScale = 300f;
     public const float DefaultScale = 0.35f;
     private const float IconSize = 14f;
@@ -2089,7 +2089,7 @@ public sealed class Radar : MonoBehaviour
 
         if (CheatToggles.radarColorBased) return SafePlayerColor(p);
         if (isImp) return Color.red;
-        return new Color(0.82f, 0.71f, 0.55f, 1f); // Tan/beige like anonymous votes
+        return Color.blue; // Blue for crewmates
     }
 
     private static void ApplyPlayerIconColors(Image img, Color color, bool isImp, bool isDead)
