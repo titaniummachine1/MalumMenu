@@ -747,6 +747,9 @@ public sealed class Radar : MonoBehaviour
         {
             SetVisible(false);
             SetBigMapOverlayVisible(false);
+            // Clear background texture to prevent white overlay
+            if (_background != null) _background.texture = null;
+            _bgTex = null;
             _dragging = false;
             return;
         }
@@ -1123,6 +1126,8 @@ public sealed class Radar : MonoBehaviour
         {
             if (!Input.GetMouseButtonDown(0)) return;
             if (!RectTransformUtility.RectangleContainsScreenPoint(_window, Input.mousePosition, null)) return;
+            // Only allow dragging when menu is open
+            if (!MenuUI.isGUIActive) return;
             _dragging = true;
             _dragStartMouse = Input.mousePosition;
             _dragStartAnchored = anchoredPosition;
