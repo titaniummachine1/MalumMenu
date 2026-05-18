@@ -1715,7 +1715,8 @@ public sealed class Radar : MonoBehaviour
         }
         else
         {
-            // Don't draw background if texture is missing
+            // Don't draw background texture if missing, but keep radar box visible for configuration
+            _background.texture = null;
             _background.enabled = false;
         }
     }

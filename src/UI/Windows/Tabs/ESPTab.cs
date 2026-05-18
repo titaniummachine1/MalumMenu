@@ -96,8 +96,6 @@ public class ESPTab : ITab
 
             CheatToggles.radarColorBased = GUILayout.Toggle(CheatToggles.radarColorBased, " Color-based");
 
-            CheatToggles.radarShowTasks = GUILayout.Toggle(CheatToggles.radarShowTasks, " Show Tasks");
-
             CheatToggles.mapTrails = GUILayout.Toggle(CheatToggles.mapTrails, " Show Trails");
 
             if (CheatToggles.mapTrails)

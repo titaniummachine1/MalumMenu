@@ -58,7 +58,6 @@ public struct CheatToggles
     public static bool radarImps;
     public static bool radarGhosts;
     public static bool radarColorBased;
-    public static bool radarShowTasks;
     public static bool mapTrails;
     public static float mapTrailDuration = 20f;
     public static bool minimapAlwaysOn;
