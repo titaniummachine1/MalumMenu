@@ -107,7 +107,7 @@ public sealed class Radar : MonoBehaviour
     }
 
     public const float MinScale = 0.1f;
-    public const float MaxScale = 3.0f;
+    public const float MaxScale = 2.75f;
     private const float BaseSizeAtDefaultScale = 300f;
     public const float DefaultScale = 0.35f;
     private const float IconSize = 14f;
