@@ -742,6 +742,15 @@ public sealed class Radar : MonoBehaviour
             return;
         }
 
+        // Hide radar in lobby (not on ship) to prevent white texture bug
+        if (!Utils.isShip)
+        {
+            SetVisible(false);
+            SetBigMapOverlayVisible(false);
+            _dragging = false;
+            return;
+        }
+
         var map = MapBehaviour.Instance;
         var mapOpen = map != null && map.gameObject != null && map.gameObject.activeInHierarchy;
         if (mapOpen && !_wasMapOpen)
