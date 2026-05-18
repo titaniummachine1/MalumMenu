@@ -742,12 +742,23 @@ public sealed class Radar : MonoBehaviour
             return;
         }
 
-        // Hide radar in lobby (not on ship) to prevent white texture bug
+        // Show radar box in main menu for configuration, but clear texture when not on ship
         if (!Utils.isShip)
         {
-            SetVisible(false);
+            // Only show in main menu or lobby, not in other scenes
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
+            if (scene != "MainMenu" && scene != "MatchMaking")
+            {
+                SetVisible(false);
+                SetBigMapOverlayVisible(false);
+                _dragging = false;
+                return;
+            }
+
+            // Show radar box for configuration in main menu/lobby
+            SetVisible(true);
             SetBigMapOverlayVisible(false);
-            // Clear background texture to prevent white overlay
+            // Clear background texture when not on ship
             if (_background != null) _background.texture = null;
             _bgTex = null;
             _dragging = false;
