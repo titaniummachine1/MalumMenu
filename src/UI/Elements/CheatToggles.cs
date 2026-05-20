@@ -143,6 +143,8 @@ public struct CheatToggles
     // Host-Only
     public static bool voteImmune;
     public static bool forceRole;
+    public static RoleTypes? forcedRole;
+    public static bool showRolesMenu;
     public static RoleTypes? roleSwapTarget;
     public static bool forceRoleLegit;
     public static bool skipMeeting;
