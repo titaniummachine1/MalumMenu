@@ -39,11 +39,11 @@ public class HostOnlyTab : ITab
             ? $" Role Swap ({CheatToggles.roleSwapTarget.Value})"
             : " Role Swap";
 
-        bool newRoleSwap = GUILayout.Toggle(CheatToggles.forceRole, roleLabel);
-        if (newRoleSwap != CheatToggles.forceRole)
+        bool newForceRole = GUILayout.Toggle(CheatToggles.forceRole, roleLabel);
+        if (newForceRole != CheatToggles.forceRole)
         {
-            CheatToggles.forceRole = newRoleSwap;
-            if (!newRoleSwap)
+            CheatToggles.forceRole = newForceRole;
+            if (!newForceRole)
                 CheatToggles.roleSwapTarget = null;
         }
 
