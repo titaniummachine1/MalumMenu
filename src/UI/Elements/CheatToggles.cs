@@ -206,6 +206,7 @@ public struct CheatToggles
         spectate = variableToKeep == "spectate" && spectate;
         setFakeRole = variableToKeep == "setFakeRole" && setFakeRole;
         setFakeAlive = variableToKeep == "setFakeAlive" && setFakeAlive;
+        forceRole = variableToKeep == "forceRole" && forceRole;
         teleportPlayer = variableToKeep == "teleportPlayer" && teleportPlayer;
     }
 
