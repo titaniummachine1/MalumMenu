@@ -319,4 +319,59 @@ public struct CheatToggles
             roleSwapTarget = role;
         }
     }
+
+
+    // Snapshot of host-only preference toggles -- persists across host loss so settings
+    // are automatically restored when host is regained without needing a manual reset.
+    private struct HostStateSnapshot
+    {
+        public bool forceRole;
+        public RoleTypes? roleSwapTarget;
+        public bool forceRoleLegit;
+        public bool voteImmune;
+        public bool skipMeeting;
+        public bool forceStartGame;
+        public bool noGameEnd;
+        public bool showProtectMenu;
+        public bool noOptionsLimits;
+    }
+
+    private static HostStateSnapshot _hostSnapshot;
+    private static bool _hasHostSnapshot;
+
+    // Saves current host-only toggle state into the snapshot.
+    // Called just before the force-clear that happens when host is lost.
+    public static void SaveHostSnapshot()
+    {
+        _hostSnapshot = new HostStateSnapshot
+        {
+            forceRole       = forceRole,
+            roleSwapTarget  = roleSwapTarget,
+            forceRoleLegit  = forceRoleLegit,
+            voteImmune      = voteImmune,
+            skipMeeting     = skipMeeting,
+            forceStartGame  = forceStartGame,
+            noGameEnd       = noGameEnd,
+            showProtectMenu = showProtectMenu,
+            noOptionsLimits = noOptionsLimits,
+        };
+        _hasHostSnapshot = true;
+    }
+
+    // Restores the saved host snapshot back into the live toggles.
+    // Called when host is regained.
+    public static void RestoreHostSnapshot()
+    {
+        if (!_hasHostSnapshot) return;
+
+        forceRole       = _hostSnapshot.forceRole;
+        roleSwapTarget  = _hostSnapshot.roleSwapTarget;
+        forceRoleLegit  = _hostSnapshot.forceRoleLegit;
+        voteImmune      = _hostSnapshot.voteImmune;
+        skipMeeting     = _hostSnapshot.skipMeeting;
+        forceStartGame  = _hostSnapshot.forceStartGame;
+        noGameEnd       = _hostSnapshot.noGameEnd;
+        showProtectMenu = _hostSnapshot.showProtectMenu;
+        noOptionsLimits = _hostSnapshot.noOptionsLimits;
+    }
 }

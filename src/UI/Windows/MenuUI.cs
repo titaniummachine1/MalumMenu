@@ -15,6 +15,7 @@ public class MenuUI : MonoBehaviour
     private List<ITab> _tabs = new();
     private int _selectedTab;
     public static float hue; // For RGB mode
+    private bool _wasHost; // Tracks previous frame host status for snapshot save/restore
 
     private void Start()
     {
@@ -153,6 +154,18 @@ public class MenuUI : MonoBehaviour
 
             MalumCheats.StopShipAnimCheats();
         }
+
+        var isHostNow = Utils.isClient && Utils.isHost;
+
+        // Save host-only toggle state the moment host is lost so it can be restored later
+        if (_wasHost && !isHostNow)
+            CheatToggles.SaveHostSnapshot();
+
+        // Restore saved host-only state the moment host is regained
+        if (!_wasHost && isHostNow)
+            CheatToggles.RestoreHostSnapshot();
+
+        _wasHost = isHostNow;
 
         if(Utils.isClient && !Utils.isHost && !Utils.isFreePlay)
         {
