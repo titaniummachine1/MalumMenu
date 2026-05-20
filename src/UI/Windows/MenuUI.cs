@@ -186,6 +186,7 @@ public class MenuUI : MonoBehaviour
             CheatToggles.roleSwapTarget = null;
             CheatToggles.noGameEnd = false;
             CheatToggles.showProtectMenu = false;
+            CheatToggles.showRolesMenu = false;
             CheatToggles.noOptionsLimits = false;
         }
 
