@@ -16,7 +16,6 @@ public static class MalumPPMCheats
     private static bool _ejectPlayerActive;
     private static bool _setFakeRoleActive;
     private static bool _setFakeAliveActive;
-    private static bool _forceRoleActive;
     private static RoleTypes? _oldRole = null;
     private static bool _roleSwapActive;
     private static bool _roleSwapArmed;
@@ -354,6 +353,58 @@ public static class MalumPPMCheats
         }
     }
 
+    public static void SetFakeAlivePPM()
+    {
+        if (CheatToggles.setFakeAlive)
+        {
+
+            if (!_setFakeAliveActive)
+            {
+
+                // Close any player pick menus already open & their cheats
+                if (PlayerPickMenu.playerpickMenu != null)
+                {
+                    PlayerPickMenu.playerpickMenu.Close();
+                    CheatToggles.DisablePPMCheats("setFakeAlive");
+                }
+
+                List<NetworkedPlayerInfo> playerDataList = new List<NetworkedPlayerInfo>();
+
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Alive", OutfitPreset.Crewmate, Utils.GetBehaviourByRoleType(RoleTypes.Crewmate)));
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Dead", OutfitPreset.Dead, Utils.GetBehaviourByRoleType(RoleTypes.CrewmateGhost)));
+
+                // Player pick menu made for changing your alive state with a custom choice list
+                PlayerPickMenu.OpenPlayerPickMenu(playerDataList, (Action) (() =>
+                {
+                    if (PlayerPickMenu.targetPlayerData.Role.IsDead)
+                    {
+                        PlayerControl.LocalPlayer.Die(DeathReason.Exile, true);
+                    }
+                    else
+                    {
+                        PlayerControl.LocalPlayer.Revive();
+                    }
+                }));
+
+                _setFakeAliveActive = true;
+            }
+
+            // Deactivate cheat if menu is closed
+            if (PlayerPickMenu.playerpickMenu == null)
+            {
+                CheatToggles.setFakeAlive = false;
+            }
+
+        }
+        else
+        {
+            if (_setFakeAliveActive)
+            {
+                _setFakeAliveActive = false;
+            }
+        }
+    }
+
     public static void RoleSwapPPM()
     {
         if (CheatToggles.forceRole)
@@ -455,58 +506,6 @@ public static class MalumPPMCheats
         var options = GameOptionsManager.Instance?.CurrentGameOptions;
         if (options == null) return true;
         return options.RoleOptions.GetNumPerGame(roleType) > 0;
-    }
-
-    public static void SetFakeAlivePPM()
-    {
-        if (CheatToggles.setFakeAlive)
-        {
-
-            if (!_setFakeAliveActive)
-            {
-
-                // Close any player pick menus already open & their cheats
-                if (PlayerPickMenu.playerpickMenu != null)
-                {
-                    PlayerPickMenu.playerpickMenu.Close();
-                    CheatToggles.DisablePPMCheats("setFakeAlive");
-                }
-
-                List<NetworkedPlayerInfo> playerDataList = new List<NetworkedPlayerInfo>();
-
-                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Alive", OutfitPreset.Crewmate, Utils.GetBehaviourByRoleType(RoleTypes.Crewmate)));
-                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Dead", OutfitPreset.Dead, Utils.GetBehaviourByRoleType(RoleTypes.CrewmateGhost)));
-
-                // Player pick menu made for changing your alive state with a custom choice list
-                PlayerPickMenu.OpenPlayerPickMenu(playerDataList, (Action) (() =>
-                {
-                    if (PlayerPickMenu.targetPlayerData.Role.IsDead)
-                    {
-                        PlayerControl.LocalPlayer.Die(DeathReason.Exile, true);
-                    }
-                    else
-                    {
-                        PlayerControl.LocalPlayer.Revive();
-                    }
-                }));
-
-                _setFakeAliveActive = true;
-            }
-
-            // Deactivate cheat if menu is closed
-            if (PlayerPickMenu.playerpickMenu == null)
-            {
-                CheatToggles.setFakeAlive = false;
-            }
-
-        }
-        else
-        {
-            if (_setFakeAliveActive)
-            {
-                _setFakeAliveActive = false;
-            }
-        }
     }
 
     public static void SpectatePPM()
