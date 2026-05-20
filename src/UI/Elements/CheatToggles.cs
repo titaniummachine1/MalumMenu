@@ -223,6 +223,8 @@ public struct CheatToggles
 
     // Saves cheat toggles and their keybinds to MalumProfile.txt
     // Format per line: ToggleName = True/False = KeyCode.KEY
+    // Host-only fields are read from the snapshot when not currently host, because
+    // the live values are force-cleared to false and would overwrite the real settings.
     public static void SaveTogglesToProfile()
     {
         using var writer = new StreamWriter(MalumMenu.ProfilePath);
@@ -235,15 +237,33 @@ public struct CheatToggles
         writer.WriteLine("# - Keybinds are only applied after loading this profile by pressing 'Load from Profile' in the Config menu");
         writer.WriteLine();
 
+        bool useSnapshot = _hasHostSnapshot && !Utils.isHost;
+
         foreach (var field in ToggleFields.Values)
         {
             Keybinds.TryGetValue(field.Name, out var key);  // If no key is set then write KeyCode.None
-            writer.WriteLine($"{field.Name} = {field.GetValue(null)} = KeyCode.{key}");
+            object value = useSnapshot ? GetSnapshotBool(field.Name) ?? field.GetValue(null) : field.GetValue(null);
+            writer.WriteLine($"{field.Name} = {value} = KeyCode.{key}");
         }
 
-        if (roleSwapTarget.HasValue)
-            writer.WriteLine($"roleSwapTarget = {roleSwapTarget.Value}");
+        var savedTarget = useSnapshot ? _hostSnapshot.roleSwapTarget : roleSwapTarget;
+        if (savedTarget.HasValue)
+            writer.WriteLine($"roleSwapTarget = {savedTarget.Value}");
     }
+
+    // Returns the snapshot value for a host-only bool field by name, or null if not a host-only field.
+    private static bool? GetSnapshotBool(string name) => name switch
+    {
+        nameof(forceRole)       => _hostSnapshot.forceRole,
+        nameof(forceRoleLegit)  => _hostSnapshot.forceRoleLegit,
+        nameof(voteImmune)      => _hostSnapshot.voteImmune,
+        nameof(skipMeeting)     => _hostSnapshot.skipMeeting,
+        nameof(forceStartGame)  => _hostSnapshot.forceStartGame,
+        nameof(noGameEnd)       => _hostSnapshot.noGameEnd,
+        nameof(showProtectMenu) => _hostSnapshot.showProtectMenu,
+        nameof(noOptionsLimits) => _hostSnapshot.noOptionsLimits,
+        _ => null
+    };
 
     // Loads cheat toggles and their keybinds from MalumProfile.txt if the file is present
     // Format per line: ToggleName = True/False = KeyCode.KEY
@@ -274,11 +294,10 @@ public struct CheatToggles
                 continue;
             }
 
+            // forceRole is never saved with a keybind (it requires PPM flow to arm),
+            // but the toggle value itself is loaded so the snapshot captures it correctly.
             if (name == nameof(forceRole))
-            {
                 Keybinds[name] = KeyCode.None;
-                continue;
-            }
 
             // Loads whether the cheat is enabled or disabled by default
             if (bool.TryParse(parts[1].Trim(), out var boolVal))
@@ -304,6 +323,10 @@ public struct CheatToggles
 
             Keybinds[name] = key;
         }
+
+        // After loading, sync host-only values into the snapshot so RestoreHostSnapshot
+        // works correctly on the next host gain even after a game restart.
+        SaveHostSnapshot();
     }
 
     public static void LoadNonBoolToggles(string line)
