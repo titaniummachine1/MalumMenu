@@ -9,9 +9,9 @@ public class MenuUI : MonoBehaviour
     public static int windowHeight = 550;
     public static int windowWidth = 700;
     private Rect _windowRect;
+    public static Rect windowRect;
 
     public static bool isGUIActive = false;
-    public static bool consumedClick = false;
     private List<ITab> _tabs = new();
     private int _selectedTab;
     public static float hue; // For RGB mode
@@ -193,17 +193,11 @@ public class MenuUI : MonoBehaviour
         UIHelpers.ApplyUIColor();
 
         _windowRect = GUI.Window((int)WindowId.MenuUI, _windowRect, (GUI.WindowFunction)WindowFunction, "MalumMenu v" + MalumMenu.malumVersion);
+        windowRect = _windowRect;
 
         // Block mouse clicks from passing through to game/PPM when over menu window
         if (_windowRect.Contains(Event.current.mousePosition) && Event.current.type == EventType.MouseDown)
-        {
-            consumedClick = true;
             Event.current.Use();
-        }
-        else if (Event.current.type == EventType.MouseDown)
-        {
-            consumedClick = false;
-        }
     }
 
     public void WindowFunction(int windowID)
