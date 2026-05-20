@@ -143,9 +143,8 @@ public struct CheatToggles
     // Host-Only
     public static bool voteImmune;
     public static bool forceRole;
-    public static ForcedRole forcedRoleSelection;
+    public static RoleTypes? roleSwapTarget;
     public static bool forceRoleLegit;
-    public static bool showForceRoleMenu;
     public static bool skipMeeting;
     public static bool forceStartGame;
     public static bool noGameEnd;
@@ -157,20 +156,6 @@ public struct CheatToggles
     public static bool killAll;
     public static bool killAllCrew;
     public static bool killAllImps;
-
-    public enum ForcedRole
-    {
-        Crewmate,
-        Engineer,
-        Scientist,
-        Tracker,
-        Noisemaker,
-        Detective,
-        Impostor,
-        Shapeshifter,
-        Phantom,
-        Viper
-    }
 
     // Passive
     public static bool unlockFeatures;
@@ -224,7 +209,7 @@ public struct CheatToggles
 
     public static bool ShouldPPMClose()
     {
-        return !setFakeRole && !setFakeAlive && !ejectPlayer && !reportBody && !telekillPlayer && !killPlayer && !spectate && !teleportPlayer;
+        return !setFakeRole && !setFakeAlive && !ejectPlayer && !reportBody && !telekillPlayer && !killPlayer && !spectate && !teleportPlayer && !forceRole;
     }
 
     // Disables all cheat toggles by setting all to false using the cached ToggleFields
@@ -256,7 +241,8 @@ public struct CheatToggles
             writer.WriteLine($"{field.Name} = {field.GetValue(null)} = KeyCode.{key}");
         }
 
-        writer.WriteLine($"forcedRoleSelection = {forcedRoleSelection}");
+        if (roleSwapTarget.HasValue)
+            writer.WriteLine($"roleSwapTarget = {roleSwapTarget.Value}");
     }
 
     // Loads cheat toggles and their keybinds from MalumProfile.txt if the file is present
@@ -328,9 +314,9 @@ public struct CheatToggles
         var name = parts[0].Trim();
         var value = parts[1].Trim();
 
-        if (name == "forcedRoleSelection" && System.Enum.TryParse<ForcedRole>(value, true, out var role))
+        if (name == "roleSwapTarget" && System.Enum.TryParse<RoleTypes>(value, true, out var role))
         {
-            forcedRoleSelection = role;
+            roleSwapTarget = role;
         }
     }
 }

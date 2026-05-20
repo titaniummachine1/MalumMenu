@@ -35,7 +35,20 @@ public class HostOnlyTab : ITab
 
     private void DrawGeneral()
     {
-        CheatToggles.showForceRoleMenu = GUILayout.Toggle(CheatToggles.showForceRoleMenu, " Show Force Role Menu");
+        string roleLabel = CheatToggles.roleSwapTarget.HasValue
+            ? $" Role Swap ({CheatToggles.roleSwapTarget.Value})"
+            : " Role Swap";
+
+        bool newForceRole = GUILayout.Toggle(CheatToggles.forceRole, roleLabel);
+        if (newForceRole != CheatToggles.forceRole)
+        {
+            CheatToggles.forceRole = newForceRole;
+            if (!newForceRole)
+                CheatToggles.roleSwapTarget = null;
+        }
+
+        if (CheatToggles.forceRole)
+            CheatToggles.forceRoleLegit = GUILayout.Toggle(CheatToggles.forceRoleLegit, " Legit Mode");
 
         CheatToggles.killVanished = GUILayout.Toggle(CheatToggles.killVanished, " Kill While Vanished");
 
@@ -44,8 +57,6 @@ public class HostOnlyTab : ITab
         CheatToggles.noKillCd = GUILayout.Toggle(CheatToggles.noKillCd, " No Kill Cooldown");
 
         CheatToggles.showProtectMenu = GUILayout.Toggle(CheatToggles.showProtectMenu, " Show Protect Menu");
-
-        // CheatToggles.forceRoleOld = GUILayout.Toggle(CheatToggles.forceRoleOld, " Force Role (Legacy)");
 
         // CheatToggles.noOptionsLimits = GUILayout.Toggle(CheatToggles.noOptionsLimits, " No Options Limits");
     }

@@ -33,5 +33,6 @@ public static class AmongUsClient_OnGameJoined
     public static void Postfix(string gameIdString)
     {
         lastGameIdString = gameIdString;
+        PlayerControl_RpcSetRole.ResetState();
     }
 }

@@ -153,7 +153,7 @@ public class MenuUI : MonoBehaviour
             MalumCheats.StopShipAnimCheats();
         }
 
-        if(!Utils.isHost && !Utils.isFreePlay)
+        if(Utils.isClient && !Utils.isHost && !Utils.isFreePlay)
         {
             CheatToggles.killAll = false;
             CheatToggles.telekillPlayer = false;
@@ -169,9 +169,9 @@ public class MenuUI : MonoBehaviour
             CheatToggles.voteImmune = false;
             CheatToggles.forceRole = false;
             CheatToggles.forceRoleLegit = false;
+            CheatToggles.roleSwapTarget = null;
             CheatToggles.noGameEnd = false;
             CheatToggles.showProtectMenu = false;
-            CheatToggles.showForceRoleMenu = false;
             CheatToggles.noOptionsLimits = false;
         }
 

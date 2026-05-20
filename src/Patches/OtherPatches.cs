@@ -351,26 +351,28 @@ public static class PlayerControl_RpcSetRole
 
     private static RoleTypes GetTargetRole()
     {
-        return CheatToggles.forcedRoleSelection switch
-        {
-            CheatToggles.ForcedRole.Crewmate => RoleTypes.Crewmate,
-            CheatToggles.ForcedRole.Engineer => RoleTypes.Engineer,
-            CheatToggles.ForcedRole.Scientist => RoleTypes.Scientist,
-            CheatToggles.ForcedRole.Tracker => RoleTypes.Tracker,
-            CheatToggles.ForcedRole.Noisemaker => RoleTypes.Noisemaker,
-            CheatToggles.ForcedRole.Detective => RoleTypes.Detective,
-            CheatToggles.ForcedRole.Impostor => RoleTypes.Impostor,
-            CheatToggles.ForcedRole.Shapeshifter => RoleTypes.Shapeshifter,
-            CheatToggles.ForcedRole.Phantom => RoleTypes.Phantom,
-            CheatToggles.ForcedRole.Viper => RoleTypes.Viper,
-            _ => RoleTypes.Crewmate
-        };
+        return CheatToggles.roleSwapTarget ?? RoleTypes.Crewmate;
     }
 
     public static bool Prefix(PlayerControl __instance, ref RoleTypes roleType, bool canOverrideRole)
     {
-        if (!Utils.isHost) return true;
-        if (!CheatToggles.forceRole) return true;
+        if (!Utils.isHost)
+        {
+            RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Prefix skipped: not host. forceRole={CheatToggles.forceRole}");
+            return true;
+        }
+        if (!CheatToggles.forceRole)
+        {
+            RoleSwapLogger.Logger.LogInfo("[ROLE RPC BUFFER] Prefix skipped: forceRole is disabled.");
+            return true;
+        }
+
+        if (_assignmentBatchComplete && _seenAssignmentCount == 0)
+        {
+            _assignmentBatchComplete = false;
+            RoleSwapLogger.Logger.LogInfo("[ROLE RPC BUFFER] New role assignment batch detected, resetting state.");
+        }
+
         if (_assignmentBatchComplete) return true;
 
         var localPlayer = PlayerControl.LocalPlayer;
@@ -533,6 +535,15 @@ public static class PlayerControl_RpcSetRole
         _bufferedAssignments.Clear();
         _bufferedOverrideFlags.Clear();
         _seenAssignmentCount = 0;
+    }
+
+    public static void ResetState()
+    {
+        _bufferedAssignments.Clear();
+        _bufferedOverrideFlags.Clear();
+        _seenAssignmentCount = 0;
+        _assignmentBatchComplete = false;
+        RoleSwapLogger.Logger.LogInfo("[ROLE RPC BUFFER] State reset for new game.");
     }
 }
 
