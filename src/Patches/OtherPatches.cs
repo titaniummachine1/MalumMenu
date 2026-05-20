@@ -359,7 +359,7 @@ public static class PlayerControl_RpcSetRole
 
     public static bool Prefix(PlayerControl __instance, ref RoleTypes roleType, bool canOverrideRole)
     {
-        if (!Utils.isHost || !CheatToggles.forceRole || !CheatToggles.roleSwapTarget.HasValue)
+        if (!Utils.isHost || !CheatToggles.roleSwap || !CheatToggles.roleSwapTarget.HasValue)
             return true;
 
         var localPlayer = PlayerControl.LocalPlayer;
