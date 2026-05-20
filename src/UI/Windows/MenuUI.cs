@@ -167,7 +167,7 @@ public class MenuUI : MonoBehaviour
 
         _wasHost = isHostNow;
 
-        if(Utils.isClient && !Utils.isHost && !Utils.isFreePlay)
+        if(!Utils.isHost && !Utils.isFreePlay)
         {
             CheatToggles.killAll = false;
             CheatToggles.telekillPlayer = false;
