@@ -19,7 +19,7 @@ public static class MalumPPMCheats
     private static bool _roleSwapActive;
     private static bool _roleSwapArmed;
     private static bool _roleSwapOpening;
-    private static bool _roleSwapLegitState;
+    private static bool _forceRoleLegitState;
     private static int _roleSwapReopenDelay;
 
     public static void ReportBodyPPM()
@@ -324,7 +324,7 @@ public static class MalumPPMCheats
 
     public static void RoleSwapPPM()
     {
-        if (CheatToggles.roleSwap)
+        if (CheatToggles.forceRole)
         {
             // Wait for reopen delay to expire (set when legit mode changes)
             if (_roleSwapReopenDelay > 0)
@@ -344,7 +344,7 @@ public static class MalumPPMCheats
                 }
 
                 List<NetworkedPlayerInfo> playerDataList = new List<NetworkedPlayerInfo>();
-                bool legit = CheatToggles.roleSwapLegit;
+                bool legit = CheatToggles.forceRoleLegit;
 
                 // Impostor roles first
                 playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Impostor", OutfitPreset.Impostor, Utils.GetBehaviourByRoleType(RoleTypes.Impostor)));
@@ -378,11 +378,11 @@ public static class MalumPPMCheats
 
                 _roleSwapActive = true;
                 _roleSwapOpening = false;
-                _roleSwapLegitState = CheatToggles.roleSwapLegit;
+                _forceRoleLegitState = CheatToggles.forceRoleLegit;
             }
 
             // Legit mode changed while menu open - refresh it
-            if (_roleSwapActive && !_roleSwapArmed && PlayerPickMenu.playerpickMenu != null && _roleSwapLegitState != CheatToggles.roleSwapLegit)
+            if (_roleSwapActive && !_roleSwapArmed && PlayerPickMenu.playerpickMenu != null && _forceRoleLegitState != CheatToggles.forceRoleLegit)
             {
                 PlayerPickMenu.playerpickMenu.Close();
                 _roleSwapActive = false;
@@ -394,7 +394,7 @@ public static class MalumPPMCheats
             // Menu opened successfully (no longer opening), user dismissed without picking
             if (_roleSwapActive && !_roleSwapArmed && !_roleSwapOpening && PlayerPickMenu.playerpickMenu == null)
             {
-                CheatToggles.roleSwap = false;
+                CheatToggles.forceRole = false;
                 CheatToggles.roleSwapTarget = null;
                 _roleSwapActive = false;
             }
@@ -412,7 +412,7 @@ public static class MalumPPMCheats
                 _roleSwapActive = false;
                 _roleSwapArmed = false;
                 _roleSwapOpening = false;
-                _roleSwapLegitState = false;
+                _forceRoleLegitState = false;
                 _roleSwapReopenDelay = 0;
             }
         }

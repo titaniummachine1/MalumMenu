@@ -181,8 +181,8 @@ public class MenuUI : MonoBehaviour
             CheatToggles.forceStartGame = false;
             CheatToggles.skipMeeting = false;
             CheatToggles.voteImmune = false;
-            CheatToggles.roleSwap = false;
-            CheatToggles.roleSwapLegit = false;
+            CheatToggles.forceRole = false;
+            CheatToggles.forceRoleLegit = false;
             CheatToggles.roleSwapTarget = null;
             CheatToggles.noGameEnd = false;
             CheatToggles.showProtectMenu = false;

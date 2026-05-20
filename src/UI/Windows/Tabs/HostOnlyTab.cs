@@ -35,20 +35,20 @@ public class HostOnlyTab : ITab
 
     private void DrawGeneral()
     {
-        string roleLabel = (CheatToggles.roleSwap && CheatToggles.roleSwapTarget.HasValue)
+        string roleLabel = (CheatToggles.forceRole && CheatToggles.roleSwapTarget.HasValue)
             ? $" Role Swap ({CheatToggles.roleSwapTarget.Value})"
             : " Role Swap";
 
-        bool newRoleSwap = GUILayout.Toggle(CheatToggles.roleSwap, roleLabel);
-        if (newRoleSwap != CheatToggles.roleSwap)
+        bool newRoleSwap = GUILayout.Toggle(CheatToggles.forceRole, roleLabel);
+        if (newRoleSwap != CheatToggles.forceRole)
         {
-            CheatToggles.roleSwap = newRoleSwap;
+            CheatToggles.forceRole = newRoleSwap;
             if (!newRoleSwap)
                 CheatToggles.roleSwapTarget = null;
         }
 
-        if (CheatToggles.roleSwap)
-            CheatToggles.roleSwapLegit = GUILayout.Toggle(CheatToggles.roleSwapLegit, " Legit Swap");
+        if (CheatToggles.forceRole)
+            CheatToggles.forceRoleLegit = GUILayout.Toggle(CheatToggles.forceRoleLegit, " Legit Swap");
 
         CheatToggles.killVanished = GUILayout.Toggle(CheatToggles.killVanished, " Kill While Vanished");
 

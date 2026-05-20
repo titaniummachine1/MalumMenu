@@ -142,9 +142,9 @@ public struct CheatToggles
 
     // Host-Only
     public static bool voteImmune;
-    public static bool roleSwap;
+    public static bool forceRole;
     public static RoleTypes? roleSwapTarget;
-    public static bool roleSwapLegit;
+    public static bool forceRoleLegit;
     public static bool skipMeeting;
     public static bool forceStartGame;
     public static bool noGameEnd;
@@ -209,7 +209,7 @@ public struct CheatToggles
 
     public static bool ShouldPPMClose()
     {
-        return !setFakeRole && !setFakeAlive && !ejectPlayer && !reportBody && !telekillPlayer && !killPlayer && !spectate && !teleportPlayer && !roleSwap;
+        return !setFakeRole && !setFakeAlive && !ejectPlayer && !reportBody && !telekillPlayer && !killPlayer && !spectate && !teleportPlayer && !forceRole;
     }
 
     // Disables all cheat toggles by setting all to false using the cached ToggleFields
@@ -274,7 +274,7 @@ public struct CheatToggles
                 continue;
             }
 
-            if (name == nameof(roleSwap))
+            if (name == nameof(forceRole))
             {
                 Keybinds[name] = KeyCode.None;
                 continue;
@@ -325,9 +325,9 @@ public struct CheatToggles
     // are automatically restored when host is regained without needing a manual reset.
     private struct HostStateSnapshot
     {
-        public bool roleSwap;
+        public bool forceRole;
         public RoleTypes? roleSwapTarget;
-        public bool roleSwapLegit;
+        public bool forceRoleLegit;
         public bool voteImmune;
         public bool skipMeeting;
         public bool forceStartGame;
@@ -345,9 +345,9 @@ public struct CheatToggles
     {
         _hostSnapshot = new HostStateSnapshot
         {
-            roleSwap       = roleSwap,
+            forceRole       = forceRole,
             roleSwapTarget  = roleSwapTarget,
-            roleSwapLegit  = roleSwapLegit,
+            forceRoleLegit  = forceRoleLegit,
             voteImmune      = voteImmune,
             skipMeeting     = skipMeeting,
             forceStartGame  = forceStartGame,
@@ -364,9 +364,9 @@ public struct CheatToggles
     {
         if (!_hasHostSnapshot) return;
 
-        roleSwap       = _hostSnapshot.roleSwap;
+        forceRole       = _hostSnapshot.forceRole;
         roleSwapTarget  = _hostSnapshot.roleSwapTarget;
-        roleSwapLegit  = _hostSnapshot.roleSwapLegit;
+        forceRoleLegit  = _hostSnapshot.forceRoleLegit;
         voteImmune      = _hostSnapshot.voteImmune;
         skipMeeting     = _hostSnapshot.skipMeeting;
         forceStartGame  = _hostSnapshot.forceStartGame;
