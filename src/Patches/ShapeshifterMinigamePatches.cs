@@ -31,6 +31,10 @@ public static class ShapeshifterMinigame_Begin
 
             shapeshifterPanel.SetPlayer(i, playerData, (Il2CppSystem.Action) (() =>
             {
+                // Ignore click if the Malum menu is open - prevents accidental PPM selections
+                // while the user is interacting with the menu UI
+                if (MenuUI.isGUIActive) return;
+
                 PlayerPickMenu.targetPlayerData = playerData; // Save targeted player
 
                 PlayerPickMenu.customAction.Invoke(); // Custom action set by openPlayerPickMenu
