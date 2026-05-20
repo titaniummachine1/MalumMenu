@@ -4,7 +4,6 @@ public enum WindowId
     ConsoleUI = 1,
     OverloadUI = 2,
     DoorsUI = 3,
-    ForceRoleUI = 4,
-    TasksUI = 5,
-    ProtectUI = 6
+    TasksUI = 4,
+    ProtectUI = 5
 }

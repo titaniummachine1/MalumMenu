@@ -35,7 +35,7 @@ public class HostOnlyTab : ITab
 
     private void DrawGeneral()
     {
-        string roleLabel = CheatToggles.roleSwapTarget.HasValue
+        string roleLabel = (CheatToggles.forceRole && CheatToggles.roleSwapTarget.HasValue)
             ? $" Role Swap ({CheatToggles.roleSwapTarget.Value})"
             : " Role Swap";
 

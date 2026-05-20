@@ -192,6 +192,10 @@ public class MenuUI : MonoBehaviour
         UIHelpers.ApplyUIColor();
 
         _windowRect = GUI.Window((int)WindowId.MenuUI, _windowRect, (GUI.WindowFunction)WindowFunction, "MalumMenu v" + MalumMenu.malumVersion);
+
+        // Block mouse clicks from passing through to game/PPM when over menu window
+        if (_windowRect.Contains(Event.current.mousePosition) && Event.current.type == EventType.MouseDown)
+            Event.current.Use();
     }
 
     public void WindowFunction(int windowID)

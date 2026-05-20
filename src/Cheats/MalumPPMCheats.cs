@@ -19,6 +19,8 @@ public static class MalumPPMCheats
     private static bool _roleSwapActive;
     private static bool _roleSwapArmed;
     private static bool _roleSwapOpening;
+    private static bool _roleSwapLegitState;
+    private static int _roleSwapReopenDelay;
 
     public static void ReportBodyPPM()
     {
@@ -324,6 +326,13 @@ public static class MalumPPMCheats
     {
         if (CheatToggles.forceRole)
         {
+            // Wait for reopen delay to expire (set when legit mode changes)
+            if (_roleSwapReopenDelay > 0)
+            {
+                _roleSwapReopenDelay--;
+                return;
+            }
+
             if (!_roleSwapActive && !_roleSwapArmed && !_roleSwapOpening)
             {
                 _roleSwapOpening = true;
@@ -337,8 +346,18 @@ public static class MalumPPMCheats
                 List<NetworkedPlayerInfo> playerDataList = new List<NetworkedPlayerInfo>();
                 bool legit = CheatToggles.forceRoleLegit;
 
-                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Crewmate", OutfitPreset.Crewmate, Utils.GetBehaviourByRoleType(RoleTypes.Crewmate)));
+                // Impostor roles first
                 playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Impostor", OutfitPreset.Impostor, Utils.GetBehaviourByRoleType(RoleTypes.Impostor)));
+
+                if (!legit || IsRoleEnabledInOptions(RoleTypes.Shapeshifter))
+                    playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Shapeshifter", OutfitPreset.Shapeshifter, Utils.GetBehaviourByRoleType(RoleTypes.Shapeshifter)));
+                if (!legit || IsRoleEnabledInOptions(RoleTypes.Phantom))
+                    playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Phantom", OutfitPreset.Phantom, Utils.GetBehaviourByRoleType(RoleTypes.Phantom)));
+                if (!legit || IsRoleEnabledInOptions(RoleTypes.Viper))
+                    playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Viper", OutfitPreset.Viper, Utils.GetBehaviourByRoleType(RoleTypes.Viper)));
+
+                // Crewmate roles after
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Crewmate", OutfitPreset.Crewmate, Utils.GetBehaviourByRoleType(RoleTypes.Crewmate)));
 
                 if (!legit || IsRoleEnabledInOptions(RoleTypes.Engineer))
                     playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Engineer", OutfitPreset.Engineer, Utils.GetBehaviourByRoleType(RoleTypes.Engineer)));
@@ -350,12 +369,6 @@ public static class MalumPPMCheats
                     playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Noisemaker", OutfitPreset.Noisemaker, Utils.GetBehaviourByRoleType(RoleTypes.Noisemaker)));
                 if (!legit || IsRoleEnabledInOptions(RoleTypes.Detective))
                     playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Detective", OutfitPreset.Detective, Utils.GetBehaviourByRoleType(RoleTypes.Detective)));
-                if (!legit || IsRoleEnabledInOptions(RoleTypes.Shapeshifter))
-                    playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Shapeshifter", OutfitPreset.Shapeshifter, Utils.GetBehaviourByRoleType(RoleTypes.Shapeshifter)));
-                if (!legit || IsRoleEnabledInOptions(RoleTypes.Phantom))
-                    playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Phantom", OutfitPreset.Phantom, Utils.GetBehaviourByRoleType(RoleTypes.Phantom)));
-                if (!legit || IsRoleEnabledInOptions(RoleTypes.Viper))
-                    playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Viper", OutfitPreset.Viper, Utils.GetBehaviourByRoleType(RoleTypes.Viper)));
 
                 PlayerPickMenu.OpenPlayerPickMenu(playerDataList, (Action)(() =>
                 {
@@ -365,6 +378,17 @@ public static class MalumPPMCheats
 
                 _roleSwapActive = true;
                 _roleSwapOpening = false;
+                _roleSwapLegitState = CheatToggles.forceRoleLegit;
+            }
+
+            // Legit mode changed while menu open - refresh it
+            if (_roleSwapActive && !_roleSwapArmed && PlayerPickMenu.playerpickMenu != null && _roleSwapLegitState != CheatToggles.forceRoleLegit)
+            {
+                PlayerPickMenu.playerpickMenu.Close();
+                _roleSwapActive = false;
+                _roleSwapArmed = false;
+                _roleSwapReopenDelay = 2; // Wait 2 frames for UI to fully clear before reopening
+                // Menu will reopen after delay with new legit setting
             }
 
             // Menu opened successfully (no longer opening), user dismissed without picking
@@ -383,11 +407,13 @@ public static class MalumPPMCheats
         }
         else
         {
-            if (_roleSwapActive || _roleSwapArmed || _roleSwapOpening)
+            if (_roleSwapActive || _roleSwapArmed || _roleSwapOpening || _roleSwapReopenDelay > 0)
             {
                 _roleSwapActive = false;
                 _roleSwapArmed = false;
                 _roleSwapOpening = false;
+                _roleSwapLegitState = false;
+                _roleSwapReopenDelay = 0;
             }
         }
     }
