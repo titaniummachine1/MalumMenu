@@ -341,19 +341,62 @@ public static class MushroomDoorSabotageMinigame_Begin
 //     }
 // }
 
+/// <summary>
+/// Harmony Prefix patch for PlayerControl.RpcSetRole that implements role swapping.
+/// 
+/// WHY PREFIX IS REQUIRED (NOT POSTFIX):
+/// - RpcSetRole is the RPC call that ASSIGNS roles to players during game start
+/// - Postfix runs AFTER the role has already been assigned - too late to swap!
+/// - Prefix intercepts BEFORE assignment, allowing us to HOLD packets and swap roles
+/// - If we used Postfix, players would already have their roles and swapping would cause
+///   visual bugs, desync, or require sending additional RPCs that could be detected
+/// 
+/// ALGORITHM DESIGN - "Buffered Prefix Hold":
+/// 1. INTERCEPT: Every RpcSetRole call is intercepted in Prefix before execution
+/// 2. FILTER: Only hold players on the TARGET TEAM (impostor crew or crewmate crew)
+///    - Local player always held (we need to swap them)
+///    - Other team players pass through normally (no swap needed)
+/// 3. BUFFER: Store held assignments in _bufferedAssignments Dictionary
+///    - Key: PlayerId, Value: Their originally assigned role
+///    - Also stores canOverrideRole flags for accurate RPC replay
+/// 4. SWAP: When all players processed, calculate optimal swap:
+///    - EXACT MATCH: Find player with exact target role → perfect 1:1 swap
+///    - LEGIT MODE: Swap with any same-team player (natural looking)
+///    - NORMAL MODE: Force local to exact role, swap target gets local's original
+/// 5. RELEASE: Send RpcSetRole calls with swapped roles, clear buffer
+/// 
+/// MEMORY EFFICIENCY:
+/// - O(n) where n = players on target team (typically 1-4 players)
+/// - Dictionary automatically cleared after each game via ResetState()
+/// </summary>
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcSetRole))]
 public static class PlayerControl_RpcSetRole
 {
+    // Buffered assignments: playerId -> their originally assigned role
+    // These are HELD (not sent) until we calculate the swap
     private static readonly Dictionary<byte, RoleTypes> _bufferedAssignments = new();
+    
+    // Preserves the canOverrideRole flag from original RpcSetRole calls
+    // Must be replayed accurately to avoid role assignment bugs
     private static readonly Dictionary<byte, bool> _bufferedOverrideFlags = new();
+    
+    // Tracks if we've completed the current assignment batch (prevents re-processing)
     private static bool _assignmentBatchComplete = false;
+    
+    // Counts how many player assignments we've seen (detects batch completion)
     private static int _seenAssignmentCount = 0;
 
+    /// <summary>Gets the role the local player wants to swap to.</summary>
     private static RoleTypes GetTargetRole()
     {
         return CheatToggles.roleSwapTarget ?? RoleTypes.Crewmate;
     }
 
+    /// <summary>
+    /// Prefix intercepts RpcSetRole BEFORE the role is assigned.
+    /// Returns false to BLOCK the original call (we'll send our own with swapped roles).
+    /// Returns true to ALLOW the original call (player not involved in swap).
+    /// </summary>
     public static bool Prefix(PlayerControl __instance, ref RoleTypes roleType, bool canOverrideRole)
     {
         if (!Utils.isHost)
@@ -393,61 +436,92 @@ public static class PlayerControl_RpcSetRole
         }
 
         _seenAssignmentCount++;
+        
+        // Determine if this player should be held for potential swap:
+        // - Local player: ALWAYS held (we need to change their role)
+        // - Same team: Held as swap candidates (impostors for impostor target, crew for crew target)
+        // - Other team: Pass through (no swap possible with wrong team)
         bool shouldHoldAssignment = __instance == localPlayer || IsSameTeam(roleType, targetRole);
+        
         if (!shouldHoldAssignment)
         {
             RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Passing through {__instance.Data.PlayerName} (ID: {__instance.PlayerId}) assignment {roleType}; not on target team {targetRole}.");
+            
+            // If this was the last player and we still have buffered assignments,
+            // we need to release them now (edge case: swap candidates were seen after non-team players)
             if (_seenAssignmentCount >= PlayerControl.AllPlayerControls.Count && _bufferedAssignments.Count > 0)
             {
                 ReleaseBufferedAssignments(localPlayer, targetRole);
             }
-            return true;
+            return true; // Allow original RPC to proceed
         }
 
+        // BUFFER: Store assignment for later swap calculation
+        // Return false = suppress original RPC (we'll send our own with swapped roles later)
         _bufferedAssignments[__instance.PlayerId] = roleType;
         _bufferedOverrideFlags[__instance.PlayerId] = canOverrideRole;
         RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Holding {__instance.Data.PlayerName} (ID: {__instance.PlayerId}) assignment {roleType}, Target: {targetRole}");
 
+        // If we've seen all players, calculate and execute the swap now
         if (_seenAssignmentCount >= PlayerControl.AllPlayerControls.Count)
         {
             ReleaseBufferedAssignments(localPlayer, targetRole);
         }
 
-        return false;
+        return false; // Block original - we'll send swapped version in ReleaseBufferedAssignments
     }
 
+    /// <summary>
+    /// Calculates and executes the role swap after all assignments have been buffered.
+    /// 
+    /// SWAP PRIORITY (best to acceptable):
+    /// 1. EXACT MATCH: Somebody already has the exact role we want → perfect 1:1 swap
+    /// 2. LEGIT FALLBACK: Any same-team player (looks natural, we get their random role)
+    /// 3. NORMAL FALLBACK: Force upgrade to exact role, swap target gets our original
+    /// 
+    /// After calculating swapped roles in _bufferedAssignments, calls ReleaseOriginalAssignments()
+    /// to actually send the RpcSetRole calls with the new assignments.
+    /// </summary>
     private static void ReleaseBufferedAssignments(PlayerControl localPlayer, RoleTypes targetRole)
     {
         _assignmentBatchComplete = true;
 
+        // Safety check: if local player wasn't buffered, something went wrong - release everyone as-is
         if (!_bufferedAssignments.TryGetValue(localPlayer.PlayerId, out var localOriginalRole))
         {
             ReleaseOriginalAssignments();
             return;
         }
 
+        // PRIORITY 1: Look for EXACT MATCH (somebody already has the role we want)
         byte targetPlayerId = byte.MaxValue;
         foreach (var assignment in _bufferedAssignments)
         {
             if (assignment.Key != localPlayer.PlayerId && assignment.Value == targetRole)
             {
                 targetPlayerId = assignment.Key;
-                break;
+                break; // Found perfect swap candidate
             }
         }
 
+        // Execute swap based on what we found:
         if (localOriginalRole == targetRole)
         {
+            // Edge case: we already have the target role naturally, just release everyone else normally
             RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Local player naturally received {targetRole}. Releasing original assignments.");
         }
         else if (targetPlayerId != byte.MaxValue)
         {
+            // PRIORITY 1 EXECUTED: Perfect 1:1 swap with exact match
+            // We get their exact role, they get our original role
             _bufferedAssignments[localPlayer.PlayerId] = targetRole;
             _bufferedAssignments[targetPlayerId] = localOriginalRole;
             RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Swapped buffered assignments: local {localOriginalRole}->{targetRole}, target player ID {targetPlayerId}->{localOriginalRole}");
         }
         else if (CheatToggles.forceRoleLegit)
         {
+            // PRIORITY 2: LEGIT MODE - Swap with any same-team player for natural looking result
+            // We get their randomly assigned role on the team (might not be exact target)
             byte teamSwapTargetId = FindPlayerOnSameTeam(targetRole, localPlayer.PlayerId);
             if (teamSwapTargetId != byte.MaxValue)
             {
@@ -462,6 +536,9 @@ public static class PlayerControl_RpcSetRole
         }
         else
         {
+            // PRIORITY 3: NORMAL MODE - Force upgrade to exact role
+            // First swap with any same-team player (we get their role, they get ours)
+            // Then upgrade ourselves to the exact target role
             byte teamSwapTargetId = FindPlayerOnSameTeam(targetRole, localPlayer.PlayerId);
             if (teamSwapTargetId != byte.MaxValue)
             {
@@ -470,13 +547,20 @@ public static class PlayerControl_RpcSetRole
                 _bufferedAssignments[teamSwapTargetId] = localOriginalRole;
                 RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Normal mode: swapped to target team. Local {localOriginalRole}->{teamRole}");
             }
+            // Force upgrade to exact target role regardless of what we swapped to
             _bufferedAssignments[localPlayer.PlayerId] = targetRole;
             RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Normal mode: force-upgraded to exact role {targetRole}");
         }
 
+        // Send all the RpcSetRole calls with swapped assignments
         ReleaseOriginalAssignments();
     }
 
+    /// <summary>
+    /// Sends the actual RpcSetRole call with the preserved canOverrideRole flag.
+    /// Uses the stored flag from _bufferedOverrideFlags to ensure the RPC is identical
+    /// to what the game originally sent (prevents role assignment bugs).
+    /// </summary>
     private static void ForceSetRoleNetworked(PlayerControl player, RoleTypes role)
     {
         _bufferedOverrideFlags.TryGetValue(player.PlayerId, out var canOverrideRole);
@@ -484,6 +568,11 @@ public static class PlayerControl_RpcSetRole
         RoleSwapLogger.Logger.LogInfo($"[ROLE RPC INTERCEPT] Released vanilla RpcSetRole for {player.Data.PlayerName} -> {role}, Override: {canOverrideRole}");
     }
 
+    /// <summary>
+    /// Finds a player on the same team as targetRole, excluding the specified player.
+    /// Used as fallback when no exact role match is available.
+    /// </summary>
+    /// <returns>PlayerId of found player, or byte.MaxValue if none found</returns>
     private static byte FindPlayerOnSameTeam(RoleTypes targetRole, byte excludedPlayerId)
     {
         foreach (var assignment in _bufferedAssignments)
@@ -510,6 +599,11 @@ public static class PlayerControl_RpcSetRole
             || role == RoleTypes.Viper;
     }
 
+    /// <summary>
+    /// Sends all buffered RpcSetRole calls with potentially modified (swapped) roles.
+    /// Called after ReleaseBufferedAssignments has calculated the swap.
+    /// Clears all buffers when complete.
+    /// </summary>
     private static void ReleaseOriginalAssignments()
     {
         foreach (var assignment in _bufferedAssignments)
@@ -537,6 +631,10 @@ public static class PlayerControl_RpcSetRole
         _seenAssignmentCount = 0;
     }
 
+    /// <summary>
+    /// Resets all state for a new game. Called at game start/end to ensure
+    /// no stale data carries over between rounds.
+    /// </summary>
     public static void ResetState()
     {
         _bufferedAssignments.Clear();
