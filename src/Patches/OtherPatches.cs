@@ -515,7 +515,7 @@ public static class PlayerControl_RpcSetRole
                 {
                     ForceSetRoleNetworked(player, assignment.Value);
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     // Failed to release assignment - player may have disconnected
                 }
