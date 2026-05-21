@@ -353,20 +353,18 @@ public static class MushroomDoorSabotageMinigame_Begin
 /// 
 /// ALGORITHM DESIGN - "Buffered Prefix Hold":
 /// 1. INTERCEPT: Every RpcSetRole call is intercepted in Prefix before execution
-/// 2. FILTER: Only hold players on the TARGET TEAM (impostor crew or crewmate crew)
-///    - Local player always held (we need to swap them)
-///    - Other team players pass through normally (no swap needed)
-/// 3. BUFFER: Store held assignments in _bufferedAssignments Dictionary
+/// 2. BUFFER: Hold ALL players in _bufferedAssignments Dictionary (simplified)
 ///    - Key: PlayerId, Value: Their originally assigned role
 ///    - Also stores canOverrideRole flags for accurate RPC replay
-/// 4. SWAP: When all players processed, calculate optimal swap:
+///    - Holding everyone enables future special passes to set any player's role
+/// 3. SWAP: When all players processed, calculate optimal swap:
 ///    - EXACT MATCH: Find player with exact target role → perfect 1:1 swap
 ///    - LEGIT MODE: Swap with any same-team player (natural looking)
 ///    - NORMAL MODE: Force local to exact role, swap target gets local's original
-/// 5. RELEASE: Send RpcSetRole calls with swapped roles, clear buffer
+/// 4. RELEASE: Send RpcSetRole calls with swapped roles, clear buffer
 /// 
 /// MEMORY EFFICIENCY:
-/// - O(n) where n = players on target team (typically 1-4 players)
+/// - O(n) where n = total players (typically 4-15 players)
 /// - Dictionary automatically cleared after each game via ResetState()
 /// </summary>
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcSetRole))]
@@ -436,28 +434,10 @@ public static class PlayerControl_RpcSetRole
         }
 
         _seenAssignmentCount++;
-        
-        // Determine if this player should be held for potential swap:
-        // - Local player: ALWAYS held (we need to change their role)
-        // - Same team: Held as swap candidates (impostors for impostor target, crew for crew target)
-        // - Other team: Pass through (no swap possible with wrong team)
-        bool shouldHoldAssignment = __instance == localPlayer || IsSameTeam(roleType, targetRole);
-        
-        if (!shouldHoldAssignment)
-        {
-            RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Passing through {__instance.Data.PlayerName} (ID: {__instance.PlayerId}) assignment {roleType}; not on target team {targetRole}.");
-            
-            // If this was the last player and we still have buffered assignments,
-            // we need to release them now (edge case: swap candidates were seen after non-team players)
-            if (_seenAssignmentCount >= PlayerControl.AllPlayerControls.Count && _bufferedAssignments.Count > 0)
-            {
-                ReleaseBufferedAssignments(localPlayer, targetRole);
-            }
-            return true; // Allow original RPC to proceed
-        }
 
-        // BUFFER: Store assignment for later swap calculation
-        // Return false = suppress original RPC (we'll send our own with swapped roles later)
+        // SIMPLIFIED: Hold ALL players, not just target team
+        // This enables future special passes where we can set anyone's role
+        // Everyone gets buffered and released together after swap calculation
         _bufferedAssignments[__instance.PlayerId] = roleType;
         _bufferedOverrideFlags[__instance.PlayerId] = canOverrideRole;
         RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Holding {__instance.Data.PlayerName} (ID: {__instance.PlayerId}) assignment {roleType}, Target: {targetRole}");
