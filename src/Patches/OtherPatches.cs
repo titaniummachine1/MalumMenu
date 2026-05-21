@@ -341,13 +341,15 @@ public static class PlayerControl_RpcSetRole
     // First same-team player whose packet we held waiting for a better match
     private static PlayerControl _heldPlayer;
     private static RoleTypes _heldRole;
-    private static RoleTypes _localRole; // Captured when local's packet goes through
+    private static RoleTypes _localRole; // Captured when local's packet is held
+    private static bool _localCaptured;  // True once local's packet has been seen
     private static bool _swapDone;
     private static int _seenCount;
 
     public static void ResetState()
     {
         _heldPlayer = null;
+        _localCaptured = false;
         _swapDone = false;
         _seenCount = 0;
     }
@@ -361,11 +363,16 @@ public static class PlayerControl_RpcSetRole
         var localPlayer = PlayerControl.LocalPlayer;
         if (localPlayer == null) return true;
 
-        // Never block local player's packet - capture their role and let it through
+        // Hold local player's packet - capture role, suppress original broadcast
+        // The swap logic will send the correct role for local when ready
         if (__instance == localPlayer)
         {
             _localRole = roleType;
-            return true;
+            _localCaptured = true;
+            // If all other players already processed, finalize now
+            if (_seenCount >= PlayerControl.AllPlayerControls.Count - 1)
+                Finalize(localPlayer, CheatToggles.roleSwapTarget.Value, CheatToggles.forceRoleLegit);
+            return false;
         }
 
         _seenCount++;
@@ -373,19 +380,26 @@ public static class PlayerControl_RpcSetRole
         var targetRole = CheatToggles.roleSwapTarget.Value;
         bool legit = CheatToggles.forceRoleLegit;
 
-        // Exact match - swap this player with local, release any held player normally
+        // Exact match - hold and wait for local's packet if not yet captured
         if (roleType == targetRole)
         {
+            if (!_localCaptured)
+            {
+                // Store as held (overrides any same-team fallback) and wait
+                _heldPlayer = __instance;
+                _heldRole = roleType;
+                return false;
+            }
+
             _swapDone = true;
-            var localRole = _localRole;
 
             // Release previously held same-team player with their original role
-            if (_heldPlayer != null)
+            if (_heldPlayer != null && _heldPlayer != __instance)
                 _heldPlayer.RpcSetRole(_heldRole, true);
 
             // Swap: local gets target role, this player gets local's role
             localPlayer.RpcSetRole(targetRole, true);
-            __instance.RpcSetRole(localRole, true);
+            __instance.RpcSetRole(_localRole, true);
             return false; // Suppress original packet - we sent the swapped one above
         }
 
@@ -397,8 +411,8 @@ public static class PlayerControl_RpcSetRole
             return false; // Hold - wait to see if exact match appears later
         }
 
-        // Last player seen and still no exact match - finalize with held fallback
-        if (_seenCount >= totalPlayers - 1) // -1 because local player is skipped
+        // Last non-local player seen - finalize if local already captured, else wait
+        if (_seenCount >= totalPlayers - 1 && _localCaptured)
             Finalize(localPlayer, targetRole, legit);
 
         return true;
@@ -408,13 +422,16 @@ public static class PlayerControl_RpcSetRole
     {
         _swapDone = true;
 
-        if (_heldPlayer == null) return; // No same-team player found at all
-
-        var localRole = _localRole;
+        if (_heldPlayer == null)
+        {
+            // No same-team player found - release local with original role
+            localPlayer.RpcSetRole(_localRole, true);
+            return;
+        }
 
         // Swap local with the held same-team player
         // Held player gets local's original role
-        _heldPlayer.RpcSetRole(localRole, true);
+        _heldPlayer.RpcSetRole(_localRole, true);
 
         // Legit mode: local gets the held player's role (right team, random role)
         // Normal mode: local gets the exact role they wanted (force upgrade)
