@@ -338,63 +338,102 @@ public static class MushroomDoorSabotageMinigame_Begin
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcSetRole))]
 public static class PlayerControl_RpcSetRole
 {
-    private static Dictionary<byte, RoleTypes> _assignments = new();
+    // First same-team player whose packet we held waiting for a better match
+    private static PlayerControl _heldPlayer;
+    private static RoleTypes _heldRole;
+    private static RoleTypes _localRole; // Captured when local's packet goes through
     private static bool _swapDone;
-    private static int _expectedCount;
+    private static int _seenCount;
 
     public static void ResetState()
     {
-        _assignments.Clear();
+        _heldPlayer = null;
         _swapDone = false;
-        _expectedCount = 0;
+        _seenCount = 0;
     }
 
-    // Postfix observes every assignment without blocking any, then does one corrective swap
-    // after all players have been assigned - avoids black screen from held RpcSetRole calls.
-    public static void Postfix(PlayerControl __instance, RoleTypes roleType)
+    public static bool Prefix(PlayerControl __instance, RoleTypes roleType, bool canOverrideRole)
     {
         if (!Utils.isHost || !CheatToggles.forceRole || !CheatToggles.roleSwapTarget.HasValue)
-            return;
-        if (_swapDone) return;
+            return true;
+        if (_swapDone) return true;
 
         var localPlayer = PlayerControl.LocalPlayer;
-        if (localPlayer == null) return;
+        if (localPlayer == null) return true;
 
-        _assignments[__instance.PlayerId] = roleType;
-
-        if (_expectedCount == 0)
-            _expectedCount = PlayerControl.AllPlayerControls.Count;
-
-        if (_assignments.Count < _expectedCount) return;
-
-        // All assignments seen - do the swap now
-        _swapDone = true;
-        var targetRole = CheatToggles.roleSwapTarget.Value;
-
-        _assignments.TryGetValue(localPlayer.PlayerId, out var localRole);
-
-        // Already got the role we want - nothing to do
-        if (localRole == targetRole) return;
-
-        // Find a player who has the exact target role to swap with
-        var swapTarget = PlayerControl.AllPlayerControls.ToArray()
-            .FirstOrDefault(p => p.PlayerId != localPlayer.PlayerId
-                && _assignments.TryGetValue(p.PlayerId, out var r) && r == targetRole);
-
-        if (swapTarget != null)
+        // Never block local player's packet - capture their role and let it through
+        if (__instance == localPlayer)
         {
-            localPlayer.RpcSetRole(targetRole, true);
-            swapTarget.RpcSetRole(localRole, true);
-            return;
+            _localRole = roleType;
+            return true;
         }
 
-        // Exact role not in game - in legit mode don't force it
-        if (CheatToggles.forceRoleLegit) return;
+        _seenCount++;
+        int totalPlayers = PlayerControl.AllPlayerControls.Count;
+        var targetRole = CheatToggles.roleSwapTarget.Value;
+        bool legit = CheatToggles.forceRoleLegit;
 
-        // Non-legit fallback: give the role directly without swapping
-        localPlayer.RpcSetRole(targetRole, true);
+        // Exact match - swap this player with local, release any held player normally
+        if (roleType == targetRole)
+        {
+            _swapDone = true;
+            var localRole = _localRole;
+
+            // Release previously held same-team player with their original role
+            if (_heldPlayer != null)
+                _heldPlayer.RpcSetRole(_heldRole, true);
+
+            // Swap: local gets target role, this player gets local's role
+            localPlayer.RpcSetRole(targetRole, true);
+            __instance.RpcSetRole(localRole, true);
+            return false; // Suppress original packet - we sent the swapped one above
+        }
+
+        // Same team but not exact - hold the first one we see as fallback
+        if (IsSameTeam(roleType, targetRole) && _heldPlayer == null)
+        {
+            _heldPlayer = __instance;
+            _heldRole = roleType;
+            return false; // Hold - wait to see if exact match appears later
+        }
+
+        // Last player seen and still no exact match - finalize with held fallback
+        if (_seenCount >= totalPlayers - 1) // -1 because local player is skipped
+            Finalize(localPlayer, targetRole, legit);
+
+        return true;
     }
 
+    private static void Finalize(PlayerControl localPlayer, RoleTypes targetRole, bool legit)
+    {
+        _swapDone = true;
+
+        if (_heldPlayer == null) return; // No same-team player found at all
+
+        var localRole = _localRole;
+
+        // Swap local with the held same-team player
+        // Held player gets local's original role
+        _heldPlayer.RpcSetRole(localRole, true);
+
+        // Legit mode: local gets the held player's role (right team, random role)
+        // Normal mode: local gets the exact role they wanted (force upgrade)
+        var roleForLocal = legit ? _heldRole : targetRole;
+        localPlayer.RpcSetRole(roleForLocal, true);
+    }
+
+    private static bool IsSameTeam(RoleTypes role, RoleTypes targetRole)
+    {
+        return IsImpostorRole(role) == IsImpostorRole(targetRole);
+    }
+
+    private static bool IsImpostorRole(RoleTypes role)
+    {
+        return role == RoleTypes.Impostor
+            || role == RoleTypes.Shapeshifter
+            || role == RoleTypes.Phantom
+            || role == RoleTypes.Viper;
+    }
 }
 // Found here: https://github.com/g0aty/SickoMenu/blob/main/hooks/LobbyBehaviour.cpp
 [HarmonyPatch(typeof(GameContainer), nameof(GameContainer.SetupGameInfo))]
