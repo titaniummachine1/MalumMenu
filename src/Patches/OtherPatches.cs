@@ -382,7 +382,7 @@ public static class PlayerControl_RpcSetRole
     
     // SAFETY: Timeout to prevent freeze if player disconnects during role assignment
     private static float _bufferStartTime = 0f;
-    private const float BUFFER_TIMEOUT = 5f; // Max 5 seconds wait for all players
+    private const float BUFFER_TIMEOUT = 3f; // Max 3 seconds wait (fits attention span, less suspicious)
 
     /// <summary>Gets the role the local player wants to swap to.</summary>
     private static RoleTypes GetTargetRole()
