@@ -344,6 +344,7 @@ public static class PlayerControl_RpcSetRole
     private static RoleTypes _localRole; // Captured when local's packet is held
     private static bool _localCaptured;  // True once local's packet has been seen
     private static bool _swapDone;
+    private static bool _bypass;
     private static int _seenCount;
 
     public static void ResetState()
@@ -351,11 +352,13 @@ public static class PlayerControl_RpcSetRole
         _heldPlayer = null;
         _localCaptured = false;
         _swapDone = false;
+        _bypass = false;
         _seenCount = 0;
     }
 
     public static bool Prefix(PlayerControl __instance, RoleTypes roleType, bool canOverrideRole)
     {
+        if (_bypass) return true;
         if (!Utils.isHost || !CheatToggles.forceRole || !CheatToggles.roleSwapTarget.HasValue)
             return true;
         if (_swapDone) return true;
@@ -385,7 +388,10 @@ public static class PlayerControl_RpcSetRole
         {
             if (!_localCaptured)
             {
-                // Store as held (overrides any same-team fallback) and wait
+                // Exact match is better than same-team fallback; release any fallback first.
+                if (_heldPlayer != null)
+                    SendRole(_heldPlayer, _heldRole);
+
                 _heldPlayer = __instance;
                 _heldRole = roleType;
                 return false;
@@ -395,11 +401,11 @@ public static class PlayerControl_RpcSetRole
 
             // Release previously held same-team player with their original role
             if (_heldPlayer != null && _heldPlayer != __instance)
-                _heldPlayer.RpcSetRole(_heldRole, true);
+                SendRole(_heldPlayer, _heldRole);
 
             // Swap: local gets target role, this player gets local's role
-            localPlayer.RpcSetRole(targetRole, true);
-            __instance.RpcSetRole(_localRole, true);
+            SendRole(localPlayer, targetRole);
+            SendRole(__instance, _localRole);
             return false; // Suppress original packet - we sent the swapped one above
         }
 
@@ -408,6 +414,8 @@ public static class PlayerControl_RpcSetRole
         {
             _heldPlayer = __instance;
             _heldRole = roleType;
+            if (_seenCount >= totalPlayers - 1 && _localCaptured)
+                Finalize(localPlayer, targetRole, legit);
             return false; // Hold - wait to see if exact match appears later
         }
 
@@ -422,21 +430,36 @@ public static class PlayerControl_RpcSetRole
     {
         _swapDone = true;
 
+        if (_localRole == targetRole)
+        {
+            if (_heldPlayer != null)
+                SendRole(_heldPlayer, _heldRole);
+            SendRole(localPlayer, _localRole);
+            return;
+        }
+
         if (_heldPlayer == null)
         {
             // No same-team player found - release local with original role
-            localPlayer.RpcSetRole(_localRole, true);
+            SendRole(localPlayer, _localRole);
             return;
         }
 
         // Swap local with the held same-team player
         // Held player gets local's original role
-        _heldPlayer.RpcSetRole(_localRole, true);
+        SendRole(_heldPlayer, _localRole);
 
         // Legit mode: local gets the held player's role (right team, random role)
         // Normal mode: local gets the exact role they wanted (force upgrade)
         var roleForLocal = legit ? _heldRole : targetRole;
-        localPlayer.RpcSetRole(roleForLocal, true);
+        SendRole(localPlayer, roleForLocal);
+    }
+
+    private static void SendRole(PlayerControl player, RoleTypes role)
+    {
+        _bypass = true;
+        player.RpcSetRole(role, true);
+        _bypass = false;
     }
 
     private static bool IsSameTeam(RoleTypes role, RoleTypes targetRole)
