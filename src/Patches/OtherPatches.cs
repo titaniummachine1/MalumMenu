@@ -337,7 +337,7 @@ public static class MushroomDoorSabotageMinigame_Begin
 //     }
 // }
 
-/// <summary>Prefix patch for RpcSetRole - blocks and swaps roles before assignment.</summary>
+/// Prefix patch for RpcSetRole - blocks and swaps roles before assignment.
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcSetRole))]
 public static class PlayerControl_RpcSetRole
 {
@@ -399,7 +399,6 @@ public static class PlayerControl_RpcSetRole
         return false; // Block original - we'll send swapped version in ReleaseBufferedAssignments
     }
 
-    /// <summary>
     /// Calculates and executes the role swap after all assignments have been buffered.
     /// 
     /// SWAP PRIORITY (best to acceptable):
@@ -409,7 +408,6 @@ public static class PlayerControl_RpcSetRole
     /// 
     /// After calculating swapped roles in _bufferedAssignments, calls ReleaseOriginalAssignments()
     /// to actually send the RpcSetRole calls with the new assignments.
-    /// </summary>
     private static void ReleaseBufferedAssignments(PlayerControl localPlayer, RoleTypes targetRole)
     {
         _assignmentBatchComplete = true;
@@ -469,21 +467,18 @@ public static class PlayerControl_RpcSetRole
         ReleaseOriginalAssignments();
     }
 
-    /// <summary>
+
     /// Sends the actual RpcSetRole call with the preserved canOverrideRole flag.
     /// Uses the stored flag from _bufferedOverrideFlags to ensure the RPC is identical
     /// to what the game originally sent (prevents role assignment bugs).
-    /// </summary>
     private static void ForceSetRoleNetworked(PlayerControl player, RoleTypes role)
     {
         _bufferedOverrideFlags.TryGetValue(player.PlayerId, out var canOverrideRole);
         player.RpcSetRole(role, canOverrideRole);
     }
 
-    /// <summary>
     /// Finds a player on the same team as targetRole, excluding the specified player.
     /// Used as fallback when no exact role match is available.
-    /// </summary>
     /// <returns>PlayerId of found player, or byte.MaxValue if none found</returns>
     private static byte FindPlayerOnSameTeam(RoleTypes targetRole, byte excludedPlayerId)
     {
@@ -505,11 +500,9 @@ public static class PlayerControl_RpcSetRole
             || role == RoleTypes.Viper;
     }
 
-    /// <summary>
     /// Sends all buffered RpcSetRole calls with potentially modified (swapped) roles.
     /// Called after ReleaseBufferedAssignments has calculated the swap.
     /// Clears all buffers when complete.
-    /// </summary>
     private static void ReleaseOriginalAssignments()
     {
         foreach (var assignment in _bufferedAssignments)
@@ -536,10 +529,8 @@ public static class PlayerControl_RpcSetRole
         _seenAssignmentCount = 0;
     }
 
-    /// <summary>
     /// Resets all state for a new game. Called at game start/end to ensure
     /// no stale data carries over between rounds.
-    /// </summary>
     public static void ResetState()
     {
         _bufferedAssignments.Clear();
