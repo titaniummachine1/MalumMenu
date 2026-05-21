@@ -338,173 +338,61 @@ public static class MushroomDoorSabotageMinigame_Begin
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcSetRole))]
 public static class PlayerControl_RpcSetRole
 {
-    private static RoleTypes? _localOriginalRole;
-    private static bool _localRoleHeld;
-    private static byte? _bestFirstChoicePlayerId;
-    private static RoleTypes? _bestFirstChoiceRole;
-    private static bool _swapComplete;
-    private static bool _batchComplete;
-    private static int _seenCount;
+    private static Dictionary<byte, RoleTypes> _assignments = new();
+    private static bool _swapDone;
+    private static int _expectedCount;
 
     public static void ResetState()
     {
-        _localOriginalRole = null;
-        _localRoleHeld = false;
-        _bestFirstChoicePlayerId = null;
-        _bestFirstChoiceRole = null;
-        _swapComplete = false;
-        _batchComplete = false;
-        _seenCount = 0;
+        _assignments.Clear();
+        _swapDone = false;
+        _expectedCount = 0;
     }
 
-    public static bool Prefix(PlayerControl __instance, ref RoleTypes roleType, bool canOverrideRole)
+    // Postfix observes every assignment without blocking any, then does one corrective swap
+    // after all players have been assigned - avoids black screen from held RpcSetRole calls.
+    public static void Postfix(PlayerControl __instance, RoleTypes roleType)
     {
         if (!Utils.isHost || !CheatToggles.forceRole || !CheatToggles.roleSwapTarget.HasValue)
-            return true;
+            return;
+        if (_swapDone) return;
 
         var localPlayer = PlayerControl.LocalPlayer;
-        if (localPlayer == null) return true;
+        if (localPlayer == null) return;
 
+        _assignments[__instance.PlayerId] = roleType;
+
+        if (_expectedCount == 0)
+            _expectedCount = PlayerControl.AllPlayerControls.Count;
+
+        if (_assignments.Count < _expectedCount) return;
+
+        // All assignments seen - do the swap now
+        _swapDone = true;
         var targetRole = CheatToggles.roleSwapTarget.Value;
 
-        // Detect start of a new assignment batch after the previous one completed
-        if (_batchComplete && _seenCount == 0)
-            ResetState();
+        _assignments.TryGetValue(localPlayer.PlayerId, out var localRole);
 
-        if (_batchComplete || _swapComplete)
-            return true;
+        // Already got the role we want - nothing to do
+        if (localRole == targetRole) return;
 
-        _seenCount++;
-        int totalPlayers = PlayerControl.AllPlayerControls.Count;
+        // Find a player who has the exact target role to swap with
+        var swapTarget = PlayerControl.AllPlayerControls.ToArray()
+            .FirstOrDefault(p => p.PlayerId != localPlayer.PlayerId
+                && _assignments.TryGetValue(p.PlayerId, out var r) && r == targetRole);
 
-        // --- Local player's assignment arrives ---
-        if (__instance == localPlayer)
+        if (swapTarget != null)
         {
-            _localOriginalRole = roleType;
-
-            // Already naturally got the exact role we want - done
-            if (roleType == targetRole)
-            {
-                _batchComplete = true;
-                _swapComplete = true;
-                return true;
-            }
-
-            _localRoleHeld = true;
-            return false; // Hold until we find a swap target
-        }
-
-        // --- Other players' assignments ---
-
-        // Not on the target team - pass through, trigger fallback if last assignment
-        if (!IsSameTeam(roleType, targetRole))
-        {
-            if (_seenCount >= totalPlayers)
-                FinalizeBatch(localPlayer, targetRole);
-            return true;
-        }
-
-        // Exact role match - swap immediately and finish
-        if (roleType == targetRole)
-        {
-            _swapComplete = true;
-            _batchComplete = true;
-
-            if (_localRoleHeld)
-            {
-                // Local's original role is known - swap now, release both
-                localPlayer.RpcSetRole(targetRole, canOverrideRole);
-                __instance.RpcSetRole(_localOriginalRole.Value, true);
-            }
-            else
-            {
-                // Local's assignment hasn't arrived yet - hold this player so local's
-                // arrival can complete the swap
-                _bestFirstChoicePlayerId = __instance.PlayerId;
-                _bestFirstChoiceRole = roleType;
-                return false;
-            }
-
-            // Release any earlier same-team candidate held as fallback
-            ReleaseHeldFallback();
-            return false;
-        }
-
-        // On target team but not exact role - store as best first choice (fallback)
-        if (!_bestFirstChoicePlayerId.HasValue)
-        {
-            _bestFirstChoicePlayerId = __instance.PlayerId;
-            _bestFirstChoiceRole = roleType;
-
-            if (_seenCount >= totalPlayers)
-                FinalizeBatch(localPlayer, targetRole);
-
-            return false; // Hold until batch ends
-        }
-
-        // Already have a fallback candidate - release this extra same-team player immediately
-        if (_seenCount >= totalPlayers)
-            FinalizeBatch(localPlayer, targetRole);
-        return true;
-    }
-
-    private static void FinalizeBatch(PlayerControl localPlayer, RoleTypes targetRole)
-    {
-        _batchComplete = true;
-
-        if (_swapComplete) return;
-
-        // Local naturally got the target role - release any held same-team player
-        if (_localOriginalRole.HasValue && _localOriginalRole.Value == targetRole)
-        {
-            ReleaseHeldFallback();
+            localPlayer.RpcSetRole(targetRole, true);
+            swapTarget.RpcSetRole(localRole, true);
             return;
         }
 
-        // Swap local with the best first choice on the target team
-        if (_bestFirstChoicePlayerId.HasValue && _bestFirstChoiceRole.HasValue && _localRoleHeld)
-        {
-            var fallbackPlayer = PlayerControl.AllPlayerControls.ToArray()
-                .FirstOrDefault(p => p.PlayerId == _bestFirstChoicePlayerId.Value);
+        // Exact role not in game - in legit mode don't force it
+        if (CheatToggles.forceRoleLegit) return;
 
-            if (fallbackPlayer != null)
-            {
-                localPlayer.RpcSetRole(_bestFirstChoiceRole.Value, true);
-                fallbackPlayer.RpcSetRole(_localOriginalRole.Value, true);
-                _swapComplete = true;
-                _bestFirstChoicePlayerId = null;
-                return;
-            }
-        }
-
-        // No swap possible - release everything as originally assigned
-        ReleaseHeldLocal(localPlayer);
-        ReleaseHeldFallback();
-    }
-
-    private static void ReleaseHeldLocal(PlayerControl localPlayer)
-    {
-        if (_localRoleHeld && _localOriginalRole.HasValue)
-        {
-            localPlayer.RpcSetRole(_localOriginalRole.Value, true);
-            _localRoleHeld = false;
-        }
-    }
-
-    private static void ReleaseHeldFallback()
-    {
-        if (_bestFirstChoicePlayerId.HasValue && _bestFirstChoiceRole.HasValue)
-        {
-            var heldPlayer = PlayerControl.AllPlayerControls.ToArray()
-                .FirstOrDefault(p => p.PlayerId == _bestFirstChoicePlayerId.Value);
-            heldPlayer?.RpcSetRole(_bestFirstChoiceRole.Value, true);
-            _bestFirstChoicePlayerId = null;
-        }
-    }
-
-    private static bool IsSameTeam(RoleTypes role, RoleTypes targetRole)
-    {
-        return IsImpostorRole(role) == IsImpostorRole(targetRole);
+        // Non-legit fallback: give the role directly without swapping
+        localPlayer.RpcSetRole(targetRole, true);
     }
 
     private static bool IsImpostorRole(RoleTypes role)
@@ -515,7 +403,6 @@ public static class PlayerControl_RpcSetRole
             || role == RoleTypes.Viper;
     }
 }
-
 // Found here: https://github.com/g0aty/SickoMenu/blob/main/hooks/LobbyBehaviour.cpp
 [HarmonyPatch(typeof(GameContainer), nameof(GameContainer.SetupGameInfo))]
 public static class GameContainer_SetupGameInfo
