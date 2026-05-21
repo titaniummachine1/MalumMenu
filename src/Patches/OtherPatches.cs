@@ -395,13 +395,6 @@ public static class PlayerControl_RpcSetRole
         localPlayer.RpcSetRole(targetRole, true);
     }
 
-    private static bool IsImpostorRole(RoleTypes role)
-    {
-        return role == RoleTypes.Impostor
-            || role == RoleTypes.Shapeshifter
-            || role == RoleTypes.Phantom
-            || role == RoleTypes.Viper;
-    }
 }
 // Found here: https://github.com/g0aty/SickoMenu/blob/main/hooks/LobbyBehaviour.cpp
 [HarmonyPatch(typeof(GameContainer), nameof(GameContainer.SetupGameInfo))]
