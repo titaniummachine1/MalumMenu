@@ -338,126 +338,65 @@ public static class MushroomDoorSabotageMinigame_Begin
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcSetRole))]
 public static class PlayerControl_RpcSetRole
 {
-    // First same-team player whose packet we held waiting for a better match
-    private static PlayerControl _heldPlayer;
-    private static RoleTypes _heldRole;
-    private static RoleTypes _localRole; // Captured when local's packet is held
-    private static bool _localCaptured;  // True once local's packet has been seen
+    private static Dictionary<byte, RoleTypes> _assignments = new();
     private static bool _swapDone;
-    private static bool _bypass;
-    private static int _seenCount;
+    private static int _expectedCount;
 
     public static void ResetState()
     {
-        _heldPlayer = null;
-        _localCaptured = false;
+        _assignments.Clear();
         _swapDone = false;
-        _bypass = false;
-        _seenCount = 0;
+        _expectedCount = 0;
     }
 
-    public static bool Prefix(PlayerControl __instance, RoleTypes roleType, bool canOverrideRole)
+    public static void Postfix(PlayerControl __instance, RoleTypes roleType)
     {
-        if (_bypass) return true;
         if (!Utils.isHost || !CheatToggles.forceRole || !CheatToggles.roleSwapTarget.HasValue)
-            return true;
-        if (_swapDone) return true;
+            return;
+        if (_swapDone) return;
 
         var localPlayer = PlayerControl.LocalPlayer;
-        if (localPlayer == null) return true;
+        if (localPlayer == null) return;
 
-        // Do not hold local/host's packet; blocking it can stall role assignment.
-        // Capture it so later swaps can give this original role to another player.
-        if (__instance == localPlayer)
-        {
-            _localRole = roleType;
-            _localCaptured = true;
-            // If all other players already processed, finalize now
-            if (_seenCount >= PlayerControl.AllPlayerControls.Count - 1)
-                Finalize(localPlayer, CheatToggles.roleSwapTarget.Value, CheatToggles.forceRoleLegit);
-            return true;
-        }
+        _assignments[__instance.PlayerId] = roleType;
 
-        _seenCount++;
-        int totalPlayers = PlayerControl.AllPlayerControls.Count;
+        if (_expectedCount == 0)
+            _expectedCount = PlayerControl.AllPlayerControls.Count;
+
+        if (_assignments.Count < _expectedCount) return;
+
+        _swapDone = true;
         var targetRole = CheatToggles.roleSwapTarget.Value;
         bool legit = CheatToggles.forceRoleLegit;
 
-        // Exact match - hold and wait for local's packet if not yet captured
-        if (roleType == targetRole)
+        _assignments.TryGetValue(localPlayer.PlayerId, out var localRole);
+
+        // Already got the requested role naturally.
+        if (localRole == targetRole)
+            return;
+
+        var exactTarget = PlayerControl.AllPlayerControls.ToArray()
+            .FirstOrDefault(p => p.PlayerId != localPlayer.PlayerId
+                && _assignments.TryGetValue(p.PlayerId, out var role) && role == targetRole);
+
+        if (exactTarget != null)
         {
-            if (!_localCaptured)
-            {
-                // Exact match is better than same-team fallback; release any fallback first.
-                if (_heldPlayer != null)
-                    SendRole(_heldPlayer, _heldRole);
-
-                _heldPlayer = __instance;
-                _heldRole = roleType;
-                return false;
-            }
-
-            _swapDone = true;
-
-            // Release previously held same-team player with their original role
-            if (_heldPlayer != null && _heldPlayer != __instance)
-                SendRole(_heldPlayer, _heldRole);
-
-            // Swap: local gets target role, this player gets local's role
-            SendRole(localPlayer, targetRole);
-            SendRole(__instance, _localRole);
-            return false; // Suppress original packet - we sent the swapped one above
-        }
-
-        // Same team but not exact - hold the first one we see as fallback
-        if (IsSameTeam(roleType, targetRole) && _heldPlayer == null)
-        {
-            _heldPlayer = __instance;
-            _heldRole = roleType;
-            if (_seenCount >= totalPlayers - 1 && _localCaptured)
-                Finalize(localPlayer, targetRole, legit);
-            return false; // Hold - wait to see if exact match appears later
-        }
-
-        // Last non-local player seen - finalize if local already captured, else wait
-        if (_seenCount >= totalPlayers - 1 && _localCaptured)
-            Finalize(localPlayer, targetRole, legit);
-
-        return true;
-    }
-
-    private static void Finalize(PlayerControl localPlayer, RoleTypes targetRole, bool legit)
-    {
-        _swapDone = true;
-
-        if (_localRole == targetRole)
-        {
-            if (_heldPlayer != null)
-                SendRole(_heldPlayer, _heldRole);
+            localPlayer.RpcSetRole(targetRole, true);
+            exactTarget.RpcSetRole(localRole, true);
             return;
         }
 
-        if (_heldPlayer == null)
-        {
-            // No same-team player found - local's original packet already went through.
-            return;
-        }
+        var sameTeamTarget = PlayerControl.AllPlayerControls.ToArray()
+            .FirstOrDefault(p => p.PlayerId != localPlayer.PlayerId
+                && _assignments.TryGetValue(p.PlayerId, out var role) && IsSameTeam(role, targetRole));
 
-        // Swap local with the held same-team player
-        // Held player gets local's original role
-        SendRole(_heldPlayer, _localRole);
+        if (sameTeamTarget == null) return;
 
-        // Legit mode: local gets the held player's role (right team, random role)
-        // Normal mode: local gets the exact role they wanted (force upgrade)
-        var roleForLocal = legit ? _heldRole : targetRole;
-        SendRole(localPlayer, roleForLocal);
-    }
+        _assignments.TryGetValue(sameTeamTarget.PlayerId, out var sameTeamRole);
+        var roleForLocal = legit ? sameTeamRole : targetRole;
 
-    private static void SendRole(PlayerControl player, RoleTypes role)
-    {
-        _bypass = true;
-        player.RpcSetRole(role, true);
-        _bypass = false;
+        localPlayer.RpcSetRole(roleForLocal, true);
+        sameTeamTarget.RpcSetRole(localRole, true);
     }
 
     private static bool IsSameTeam(RoleTypes role, RoleTypes targetRole)
