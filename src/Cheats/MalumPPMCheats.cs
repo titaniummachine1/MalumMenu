@@ -416,6 +416,12 @@ public static class MalumPPMCheats
                 return;
             }
 
+            // If a role is already chosen (e.g. restored from snapshot), skip opening picker
+            if (!_roleSwapActive && !_roleSwapArmed && !_roleSwapOpening && CheatToggles.roleSwapTarget.HasValue)
+            {
+                _roleSwapArmed = true;
+            }
+
             if (!_roleSwapActive && !_roleSwapArmed && !_roleSwapOpening)
             {
                 _roleSwapOpening = true;
