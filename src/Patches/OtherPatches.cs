@@ -7,9 +7,15 @@ using System;
 using System.Security.Cryptography;
 using InnerNet;
 using System.Collections.Generic;
-using System.Linq;
+using BepInEx.Logging;
+using Hazel;
 
 namespace MalumMenu;
+
+public static class RoleSwapLogger
+{
+    public static readonly ManualLogSource Logger = BepInEx.Logging.Logger.CreateLogSource("MalumMenu.RoleSwap");
+}
 
 [HarmonyPatch(typeof(Constants), nameof(Constants.GetPlatformData))]
 public static class Constants_GetPlatformData
@@ -338,88 +344,157 @@ public static class MushroomDoorSabotageMinigame_Begin
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcSetRole))]
 public static class PlayerControl_RpcSetRole
 {
-    // First same-team player whose packet we held waiting for a better match
-    private static PlayerControl _heldPlayer;
-    private static RoleTypes _heldRole;
-    private static RoleTypes _localRole; // Captured when local's packet goes through
-    private static bool _swapDone;
-    private static int _seenCount;
+    private static readonly Dictionary<byte, RoleTypes> _bufferedAssignments = new();
+    private static readonly Dictionary<byte, bool> _bufferedOverrideFlags = new();
+    private static bool _assignmentBatchComplete = false;
+    private static int _seenAssignmentCount = 0;
 
-    public static void ResetState()
+    private static RoleTypes GetTargetRole()
     {
-        _heldPlayer = null;
-        _swapDone = false;
-        _seenCount = 0;
+        return CheatToggles.roleSwapTarget ?? RoleTypes.Crewmate;
     }
 
-    public static bool Prefix(PlayerControl __instance, RoleTypes roleType, bool canOverrideRole)
+    public static bool Prefix(PlayerControl __instance, ref RoleTypes roleType, bool canOverrideRole)
     {
-        if (!Utils.isHost || !CheatToggles.forceRole || !CheatToggles.roleSwapTarget.HasValue)
+        if (!Utils.isHost)
+        {
+            RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Prefix skipped: not host. forceRole={CheatToggles.forceRole}");
             return true;
-        if (_swapDone) return true;
+        }
+        if (!CheatToggles.forceRole)
+        {
+            RoleSwapLogger.Logger.LogInfo("[ROLE RPC BUFFER] Prefix skipped: forceRole is disabled.");
+            return true;
+        }
+
+        if (_assignmentBatchComplete && _seenAssignmentCount == 0)
+        {
+            _assignmentBatchComplete = false;
+            RoleSwapLogger.Logger.LogInfo("[ROLE RPC BUFFER] New role assignment batch detected, resetting state.");
+        }
+
+        if (_assignmentBatchComplete) return true;
 
         var localPlayer = PlayerControl.LocalPlayer;
         if (localPlayer == null) return true;
 
-        // Never block local player's packet - capture their role and let it through
-        if (__instance == localPlayer)
+        var targetRole = GetTargetRole();
+
+        if (__instance == localPlayer && roleType == targetRole)
         {
-            _localRole = roleType;
+            _assignmentBatchComplete = true;
+            if (_bufferedAssignments.Count > 0)
+            {
+                RoleSwapLogger.Logger.LogInfo("[ROLE RPC BUFFER] Releasing previously held assignments before disabling buffer.");
+                ReleaseOriginalAssignments();
+            }
+            RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Local player naturally received {targetRole}. Disabling buffer and letting vanilla assignments continue.");
             return true;
         }
 
-        _seenCount++;
-        int totalPlayers = PlayerControl.AllPlayerControls.Count;
-        var targetRole = CheatToggles.roleSwapTarget.Value;
-        bool legit = CheatToggles.forceRoleLegit;
-
-        // Exact match - swap this player with local, release any held player normally
-        if (roleType == targetRole)
+        _seenAssignmentCount++;
+        bool shouldHoldAssignment = __instance == localPlayer || IsSameTeam(roleType, targetRole);
+        if (!shouldHoldAssignment)
         {
-            _swapDone = true;
-            var localRole = _localRole;
-
-            // Release previously held same-team player with their original role
-            if (_heldPlayer != null)
-                _heldPlayer.RpcSetRole(_heldRole, true);
-
-            // Swap: local gets target role, this player gets local's role
-            localPlayer.RpcSetRole(targetRole, true);
-            __instance.RpcSetRole(localRole, true);
-            return false; // Suppress original packet - we sent the swapped one above
+            RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Passing through {__instance.Data.PlayerName} (ID: {__instance.PlayerId}) assignment {roleType}; not on target team {targetRole}.");
+            if (_seenAssignmentCount >= PlayerControl.AllPlayerControls.Count && _bufferedAssignments.Count > 0)
+            {
+                ReleaseBufferedAssignments(localPlayer, targetRole);
+            }
+            return true;
         }
 
-        // Same team but not exact - hold the first one we see as fallback
-        if (IsSameTeam(roleType, targetRole) && _heldPlayer == null)
+        _bufferedAssignments[__instance.PlayerId] = roleType;
+        _bufferedOverrideFlags[__instance.PlayerId] = canOverrideRole;
+        RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Holding {__instance.Data.PlayerName} (ID: {__instance.PlayerId}) assignment {roleType}, Target: {targetRole}");
+
+        if (_seenAssignmentCount >= PlayerControl.AllPlayerControls.Count)
         {
-            _heldPlayer = __instance;
-            _heldRole = roleType;
-            return false; // Hold - wait to see if exact match appears later
+            ReleaseBufferedAssignments(localPlayer, targetRole);
         }
 
-        // Last player seen and still no exact match - finalize with held fallback
-        if (_seenCount >= totalPlayers - 1) // -1 because local player is skipped
-            Finalize(localPlayer, targetRole, legit);
-
-        return true;
+        return false;
     }
 
-    private static void Finalize(PlayerControl localPlayer, RoleTypes targetRole, bool legit)
+    private static void ReleaseBufferedAssignments(PlayerControl localPlayer, RoleTypes targetRole)
     {
-        _swapDone = true;
+        _assignmentBatchComplete = true;
 
-        if (_heldPlayer == null) return; // No same-team player found at all
+        if (!_bufferedAssignments.TryGetValue(localPlayer.PlayerId, out var localOriginalRole))
+        {
+            ReleaseOriginalAssignments();
+            return;
+        }
 
-        var localRole = _localRole;
+        byte targetPlayerId = byte.MaxValue;
+        foreach (var assignment in _bufferedAssignments)
+        {
+            if (assignment.Key != localPlayer.PlayerId && assignment.Value == targetRole)
+            {
+                targetPlayerId = assignment.Key;
+                break;
+            }
+        }
 
-        // Swap local with the held same-team player
-        // Held player gets local's original role
-        _heldPlayer.RpcSetRole(localRole, true);
+        if (localOriginalRole == targetRole)
+        {
+            RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Local player naturally received {targetRole}. Releasing original assignments.");
+        }
+        else if (targetPlayerId != byte.MaxValue)
+        {
+            _bufferedAssignments[localPlayer.PlayerId] = targetRole;
+            _bufferedAssignments[targetPlayerId] = localOriginalRole;
+            RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Swapped buffered assignments: local {localOriginalRole}->{targetRole}, target player ID {targetPlayerId}->{localOriginalRole}");
+        }
+        else if (CheatToggles.forceRoleLegit)
+        {
+            byte teamSwapTargetId = FindPlayerOnSameTeam(targetRole, localPlayer.PlayerId);
+            if (teamSwapTargetId != byte.MaxValue)
+            {
+                _bufferedAssignments[localPlayer.PlayerId] = _bufferedAssignments[teamSwapTargetId];
+                _bufferedAssignments[teamSwapTargetId] = localOriginalRole;
+                RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Legit mode: swapped with player on target team. Local {localOriginalRole}->{_bufferedAssignments[localPlayer.PlayerId]}, target ID {teamSwapTargetId}->{localOriginalRole}");
+            }
+            else
+            {
+                RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Legit mode: no player on target team available. Releasing original assignments.");
+            }
+        }
+        else
+        {
+            byte teamSwapTargetId = FindPlayerOnSameTeam(targetRole, localPlayer.PlayerId);
+            if (teamSwapTargetId != byte.MaxValue)
+            {
+                var teamRole = _bufferedAssignments[teamSwapTargetId];
+                _bufferedAssignments[localPlayer.PlayerId] = teamRole;
+                _bufferedAssignments[teamSwapTargetId] = localOriginalRole;
+                RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Normal mode: swapped to target team. Local {localOriginalRole}->{teamRole}");
+            }
+            _bufferedAssignments[localPlayer.PlayerId] = targetRole;
+            RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Normal mode: force-upgraded to exact role {targetRole}");
+        }
 
-        // Legit mode: local gets the held player's role (right team, random role)
-        // Normal mode: local gets the exact role they wanted (force upgrade)
-        var roleForLocal = legit ? _heldRole : targetRole;
-        localPlayer.RpcSetRole(roleForLocal, true);
+        ReleaseOriginalAssignments();
+    }
+
+    private static void ForceSetRoleNetworked(PlayerControl player, RoleTypes role)
+    {
+        _bufferedOverrideFlags.TryGetValue(player.PlayerId, out var canOverrideRole);
+        player.RpcSetRole(role, canOverrideRole);
+        RoleSwapLogger.Logger.LogInfo($"[ROLE RPC INTERCEPT] Released vanilla RpcSetRole for {player.Data.PlayerName} -> {role}, Override: {canOverrideRole}");
+    }
+
+    private static byte FindPlayerOnSameTeam(RoleTypes targetRole, byte excludedPlayerId)
+    {
+        foreach (var assignment in _bufferedAssignments)
+        {
+            if (assignment.Key != excludedPlayerId && IsSameTeam(assignment.Value, targetRole))
+            {
+                return assignment.Key;
+            }
+        }
+
+        return byte.MaxValue;
     }
 
     private static bool IsSameTeam(RoleTypes role, RoleTypes targetRole)
@@ -434,7 +509,72 @@ public static class PlayerControl_RpcSetRole
             || role == RoleTypes.Phantom
             || role == RoleTypes.Viper;
     }
+
+    private static void ReleaseOriginalAssignments()
+    {
+        foreach (var assignment in _bufferedAssignments)
+        {
+            foreach (var player in PlayerControl.AllPlayerControls)
+            {
+                if (player.PlayerId != assignment.Key) continue;
+
+                try
+                {
+                    RoleSwapLogger.Logger.LogInfo($"[ROLE RPC BUFFER] Releasing {player.Data.PlayerName} (ID: {player.PlayerId}) as {assignment.Value}");
+                    ForceSetRoleNetworked(player, assignment.Value);
+                }
+                catch (Exception ex)
+                {
+                    RoleSwapLogger.Logger.LogWarning($"[ROLE RPC BUFFER] Failed releasing {player.Data.PlayerName}: {ex.Message}");
+                }
+
+                break;
+            }
+        }
+
+        _bufferedAssignments.Clear();
+        _bufferedOverrideFlags.Clear();
+        _seenAssignmentCount = 0;
+    }
+
+    public static void ResetState()
+    {
+        _bufferedAssignments.Clear();
+        _bufferedOverrideFlags.Clear();
+        _seenAssignmentCount = 0;
+        _assignmentBatchComplete = false;
+        RoleSwapLogger.Logger.LogInfo("[ROLE RPC BUFFER] State reset for new game.");
+    }
 }
+
+[HarmonyPatch(typeof(IntroCutscene), "CoBegin")]
+public static class IntroCutscene_CoBegin
+{
+    public static void Prefix()
+    {
+        if (!Utils.isHost) return;
+
+        foreach (var player in PlayerControl.AllPlayerControls)
+        {
+            if (player != null && player.Data != null)
+            {
+                RoleSwapLogger.Logger.LogInfo($"[GAME START] Player: {player.Data.PlayerName} (ID: {player.PlayerId}), Role: {player.Data.RoleType}, IsDead: {player.Data.IsDead}");
+            }
+        }
+
+        var gameOptions = GameOptionsManager.Instance.CurrentGameOptions;
+        if (gameOptions != null)
+        {
+            RoleSwapLogger.Logger.LogInfo($"[GAME START] Game Options - Impostors: {gameOptions.NumImpostors}, MaxPlayers: {gameOptions.MaxPlayers}");
+        }
+
+        if (CheatToggles.forceRole)
+        {
+            RoleSwapLogger.Logger.LogInfo("[ROLE SWAP] Skipping legacy IntroCutscene role mutation; buffered RpcSetRole assignment is authoritative.");
+        }
+    }
+}
+
 // Found here: https://github.com/g0aty/SickoMenu/blob/main/hooks/LobbyBehaviour.cpp
 [HarmonyPatch(typeof(GameContainer), nameof(GameContainer.SetupGameInfo))]
 public static class GameContainer_SetupGameInfo
