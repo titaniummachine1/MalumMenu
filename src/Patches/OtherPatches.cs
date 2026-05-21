@@ -366,8 +366,8 @@ public static class PlayerControl_RpcSetRole
         var localPlayer = PlayerControl.LocalPlayer;
         if (localPlayer == null) return true;
 
-        // Hold local player's packet - capture role, suppress original broadcast
-        // The swap logic will send the correct role for local when ready
+        // Do not hold local/host's packet; blocking it can stall role assignment.
+        // Capture it so later swaps can give this original role to another player.
         if (__instance == localPlayer)
         {
             _localRole = roleType;
@@ -375,7 +375,7 @@ public static class PlayerControl_RpcSetRole
             // If all other players already processed, finalize now
             if (_seenCount >= PlayerControl.AllPlayerControls.Count - 1)
                 Finalize(localPlayer, CheatToggles.roleSwapTarget.Value, CheatToggles.forceRoleLegit);
-            return false;
+            return true;
         }
 
         _seenCount++;
@@ -434,14 +434,12 @@ public static class PlayerControl_RpcSetRole
         {
             if (_heldPlayer != null)
                 SendRole(_heldPlayer, _heldRole);
-            SendRole(localPlayer, _localRole);
             return;
         }
 
         if (_heldPlayer == null)
         {
-            // No same-team player found - release local with original role
-            SendRole(localPlayer, _localRole);
+            // No same-team player found - local's original packet already went through.
             return;
         }
 
