@@ -379,6 +379,10 @@ public static class PlayerControl_RpcSetRole
     
     // Counts how many player assignments we've seen (detects batch completion)
     private static int _seenAssignmentCount = 0;
+    
+    // SAFETY: Timeout to prevent freeze if player disconnects during role assignment
+    private static float _bufferStartTime = 0f;
+    private const float BUFFER_TIMEOUT = 5f; // Max 5 seconds wait for all players
 
     /// <summary>Gets the role the local player wants to swap to.</summary>
     private static RoleTypes GetTargetRole()
@@ -405,6 +409,7 @@ public static class PlayerControl_RpcSetRole
         if (_assignmentBatchComplete && _seenAssignmentCount == 0)
         {
             _assignmentBatchComplete = false;
+            _bufferStartTime = Time.time; // Start timer on first assignment of new batch
         }
 
         if (_assignmentBatchComplete) return true;
@@ -432,8 +437,11 @@ public static class PlayerControl_RpcSetRole
         _bufferedAssignments[__instance.PlayerId] = roleType;
         _bufferedOverrideFlags[__instance.PlayerId] = canOverrideRole;
 
-        // If we've seen all players, calculate and execute the swap now
-        if (_seenAssignmentCount >= PlayerControl.AllPlayerControls.Count)
+        // SAFETY: Release on count match OR timeout (prevents freeze if player disconnects)
+        bool allPlayersSeen = _seenAssignmentCount >= PlayerControl.AllPlayerControls.Count;
+        bool timeout = Time.time - _bufferStartTime > BUFFER_TIMEOUT;
+        
+        if (allPlayersSeen || timeout)
         {
             ReleaseBufferedAssignments(localPlayer, targetRole);
         }
