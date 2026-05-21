@@ -358,6 +358,8 @@ public static class PlayerControl_RpcSetRole
         var localPlayer = PlayerControl.LocalPlayer;
         if (localPlayer == null) return;
 
+        // Never suppress/hold RpcSetRole packets here. Role assignment is synchronous
+        // enough that blocking a packet can soft-lock everyone on the black intro screen.
         _assignments[__instance.PlayerId] = roleType;
 
         if (_expectedCount == 0)
