@@ -337,64 +337,18 @@ public static class MushroomDoorSabotageMinigame_Begin
 //     }
 // }
 
-/// <summary>
-/// Harmony Prefix patch for PlayerControl.RpcSetRole that implements role swapping.
-/// 
-/// WHY PREFIX IS REQUIRED (NOT POSTFIX):
-/// - RpcSetRole is the RPC call that ASSIGNS roles to players during game start
-/// - Postfix runs AFTER the role has already been assigned - too late to swap!
-/// - Prefix intercepts BEFORE assignment, allowing us to HOLD packets and swap roles
-/// - If we used Postfix, players would already have their roles and swapping would cause
-///   visual bugs, desync, or require sending additional RPCs that could be detected
-/// 
-/// ALGORITHM DESIGN - "Buffered Prefix Hold":
-/// 1. INTERCEPT: Every RpcSetRole call is intercepted in Prefix before execution
-/// 2. BUFFER: Hold ALL players in _bufferedAssignments Dictionary (simplified)
-///    - Key: PlayerId, Value: Their originally assigned role
-///    - Also stores canOverrideRole flags for accurate RPC replay
-///    - Holding everyone enables future special passes to set any player's role
-/// 3. SWAP: When all players processed, calculate optimal swap:
-///    - EXACT MATCH: Find player with exact target role → perfect 1:1 swap
-///    - LEGIT MODE: Swap with any same-team player (natural looking)
-///    - NORMAL MODE: Force local to exact role, swap target gets local's original
-/// 4. RELEASE: Send RpcSetRole calls with swapped roles, clear buffer
-/// 
-/// MEMORY EFFICIENCY:
-/// - O(n) where n = total players (typically 4-15 players)
-/// - Dictionary automatically cleared after each game via ResetState()
-/// </summary>
+/// <summary>Prefix patch for RpcSetRole - blocks and swaps roles before assignment.</summary>
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.RpcSetRole))]
 public static class PlayerControl_RpcSetRole
 {
-    // Buffered assignments: playerId -> their originally assigned role
-    // These are HELD (not sent) until we calculate the swap
     private static readonly Dictionary<byte, RoleTypes> _bufferedAssignments = new();
-    
-    // Preserves the canOverrideRole flag from original RpcSetRole calls
-    // Must be replayed accurately to avoid role assignment bugs
     private static readonly Dictionary<byte, bool> _bufferedOverrideFlags = new();
-    
-    // Tracks if we've completed the current assignment batch (prevents re-processing)
     private static bool _assignmentBatchComplete = false;
-    
-    // Counts how many player assignments we've seen (detects batch completion)
     private static int _seenAssignmentCount = 0;
-    
-    // SAFETY: Timeout to prevent freeze if player disconnects during role assignment
     private static float _bufferStartTime = 0f;
-    private const float BUFFER_TIMEOUT = 3f; // Max 3 seconds wait (fits attention span, less suspicious)
+    private const float BUFFER_TIMEOUT = 3f;
 
-    /// <summary>Gets the role the local player wants to swap to.</summary>
-    private static RoleTypes GetTargetRole()
-    {
-        return CheatToggles.roleSwapTarget ?? RoleTypes.Crewmate;
-    }
-
-    /// <summary>
-    /// Prefix intercepts RpcSetRole BEFORE the role is assigned.
-    /// Returns false to BLOCK the original call (we'll send our own with swapped roles).
-    /// Returns true to ALLOW the original call (player not involved in swap).
-    /// </summary>
+    private static RoleTypes GetTargetRole() => CheatToggles.roleSwapTarget ?? RoleTypes.Crewmate;
     public static bool Prefix(PlayerControl __instance, ref RoleTypes roleType, bool canOverrideRole)
     {
         if (!Utils.isHost)
@@ -409,7 +363,7 @@ public static class PlayerControl_RpcSetRole
         if (_assignmentBatchComplete && _seenAssignmentCount == 0)
         {
             _assignmentBatchComplete = false;
-            _bufferStartTime = Time.time; // Start timer on first assignment of new batch
+            _bufferStartTime = Time.time;
         }
 
         if (_assignmentBatchComplete) return true;
@@ -431,13 +385,9 @@ public static class PlayerControl_RpcSetRole
 
         _seenAssignmentCount++;
 
-        // SIMPLIFIED: Hold ALL players, not just target team
-        // This enables future special passes where we can set anyone's role
-        // Everyone gets buffered and released together after swap calculation
         _bufferedAssignments[__instance.PlayerId] = roleType;
         _bufferedOverrideFlags[__instance.PlayerId] = canOverrideRole;
 
-        // SAFETY: Release on count match OR timeout (prevents freeze if player disconnects)
         bool allPlayersSeen = _seenAssignmentCount >= PlayerControl.AllPlayerControls.Count;
         bool timeout = Time.time - _bufferStartTime > BUFFER_TIMEOUT;
         
