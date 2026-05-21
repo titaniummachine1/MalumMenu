@@ -360,9 +360,8 @@ public static class PlayerControl_RpcSetRole
             return true;
         }
 
-        if (_assignmentBatchComplete && _seenAssignmentCount == 0)
+        if (_seenAssignmentCount == 0)  // First assignment in batch - start timer
         {
-            _assignmentBatchComplete = false;
             _bufferStartTime = Time.time;
         }
 
@@ -537,6 +536,7 @@ public static class PlayerControl_RpcSetRole
         _bufferedOverrideFlags.Clear();
         _seenAssignmentCount = 0;
         _assignmentBatchComplete = false;
+        _bufferStartTime = 0f;
     }
 }
 
