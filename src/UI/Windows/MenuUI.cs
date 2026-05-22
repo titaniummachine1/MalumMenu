@@ -14,6 +14,7 @@ public class MenuUI : MonoBehaviour
     private List<ITab> _tabs = new();
     private int _selectedTab;
     public static float hue; // For RGB mode
+    private bool _wasHost;
     private bool _gameWasStarted;
 
     private void Start()
@@ -153,6 +154,19 @@ public class MenuUI : MonoBehaviour
 
             MalumCheats.StopShipAnimCheats();
         }
+
+        var isHostNow = Utils.isClient && Utils.isHost;
+
+        if (_wasHost && !isHostNow)
+        {
+            CheatToggles.SaveHostSnapshot();
+            HostRoleSwapManager.ResetState();
+        }
+
+        if (!_wasHost && isHostNow)
+            CheatToggles.RestoreHostSnapshot();
+
+        _wasHost = isHostNow;
 
         if(!Utils.isHost && !Utils.isFreePlay)
         {
