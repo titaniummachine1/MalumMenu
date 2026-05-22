@@ -227,8 +227,6 @@ public struct CheatToggles
 
     // Saves cheat toggles and their keybinds to MalumProfile.txt
     // Format per line: ToggleName = True/False = KeyCode.KEY
-    // Host-only fields are read from the snapshot when not currently host, because
-    // the live values are force-cleared to false and would overwrite the real settings.
     public static void SaveTogglesToProfile()
     {
         using var writer = new StreamWriter(MalumMenu.ProfilePath);
@@ -241,33 +239,12 @@ public struct CheatToggles
         writer.WriteLine("# - Keybinds are only applied after loading this profile by pressing 'Load from Profile' in the Config menu");
         writer.WriteLine();
 
-        bool useSnapshot = _hasHostSnapshot && !Utils.isHost;
-
         foreach (var field in ToggleFields.Values)
         {
             Keybinds.TryGetValue(field.Name, out var key);  // If no key is set then write KeyCode.None
-            object value = useSnapshot ? GetSnapshotBool(field.Name) ?? field.GetValue(null) : field.GetValue(null);
-            writer.WriteLine($"{field.Name} = {value} = KeyCode.{key}");
+            writer.WriteLine($"{field.Name} = {field.GetValue(null)} = KeyCode.{key}");
         }
-
-        var savedTarget = useSnapshot ? _hostSnapshot.roleSwapTarget : roleSwapTarget;
-        if (savedTarget.HasValue)
-            writer.WriteLine($"roleSwapTarget = {savedTarget.Value}");
     }
-
-    // Returns the snapshot value for a host-only bool field by name, or null if not a host-only field.
-    private static bool? GetSnapshotBool(string name) => name switch
-    {
-        nameof(roleSwap)       => _hostSnapshot.roleSwap,
-        nameof(roleSwapLegit)  => _hostSnapshot.roleSwapLegit,
-        nameof(voteImmune)      => _hostSnapshot.voteImmune,
-        nameof(skipMeeting)     => _hostSnapshot.skipMeeting,
-        nameof(forceStartGame)  => _hostSnapshot.forceStartGame,
-        nameof(noGameEnd)       => _hostSnapshot.noGameEnd,
-        nameof(showProtectMenu) => _hostSnapshot.showProtectMenu,
-        nameof(noOptionsLimits) => _hostSnapshot.noOptionsLimits,
-        _ => null
-    };
 
     // Loads cheat toggles and their keybinds from MalumProfile.txt if the file is present
     // Format per line: ToggleName = True/False = KeyCode.KEY
@@ -292,16 +269,7 @@ public struct CheatToggles
 
             // Gets the cheat's FieldInfo from its name
             var name = parts[0].Trim();
-            if (!ToggleFields.TryGetValue(name, out var field))
-            {
-                LoadNonBoolToggles(line);
-                continue;
-            }
-
-            // roleSwap is never saved with a keybind (it requires PPM flow to arm),
-            // but the toggle value itself is loaded so the snapshot captures it correctly.
-            if (name == nameof(roleSwap))
-                Keybinds[name] = KeyCode.None;
+            if (!ToggleFields.TryGetValue(name, out var field)) continue;
 
             // Loads whether the cheat is enabled or disabled by default
             if (bool.TryParse(parts[1].Trim(), out var boolVal))
@@ -327,78 +295,5 @@ public struct CheatToggles
 
             Keybinds[name] = key;
         }
-
-        // After loading, sync host-only values into the snapshot so RestoreHostSnapshot
-        // works correctly on the next host gain even after a game restart.
-        SaveHostSnapshot();
-    }
-
-    public static void LoadNonBoolToggles(string line)
-    {
-        var parts = line.Split('=', 2);
-        if (parts.Length < 2) return;
-
-        var name = parts[0].Trim();
-        var value = parts[1].Trim();
-
-        if (name == "roleSwapTarget" && System.Enum.TryParse<RoleTypes>(value, true, out var role))
-        {
-            roleSwapTarget = role;
-        }
-    }
-
-
-    // Snapshot of host-only preference toggles -- persists across host loss so settings
-    // are automatically restored when host is regained without needing a manual reset.
-    private struct HostStateSnapshot
-    {
-        public bool roleSwap;
-        public RoleTypes? roleSwapTarget;
-        public bool roleSwapLegit;
-        public bool voteImmune;
-        public bool skipMeeting;
-        public bool forceStartGame;
-        public bool noGameEnd;
-        public bool showProtectMenu;
-        public bool noOptionsLimits;
-    }
-
-    private static HostStateSnapshot _hostSnapshot;
-    private static bool _hasHostSnapshot;
-
-    // Saves current host-only toggle state into the snapshot.
-    // Called just before the force-clear that happens when host is lost.
-    public static void SaveHostSnapshot()
-    {
-        _hostSnapshot = new HostStateSnapshot
-        {
-            roleSwap       = roleSwap,
-            roleSwapTarget = roleSwapTarget,
-            roleSwapLegit  = roleSwapLegit,
-            voteImmune      = voteImmune,
-            skipMeeting     = skipMeeting,
-            forceStartGame  = forceStartGame,
-            noGameEnd       = noGameEnd,
-            showProtectMenu = showProtectMenu,
-            noOptionsLimits = noOptionsLimits,
-        };
-        _hasHostSnapshot = true;
-    }
-
-    // Restores the saved host snapshot back into the live toggles.
-    // Called when host is regained.
-    public static void RestoreHostSnapshot()
-    {
-        if (!_hasHostSnapshot) return;
-
-        roleSwap       = _hostSnapshot.roleSwap;
-        roleSwapTarget = _hostSnapshot.roleSwapTarget;
-        roleSwapLegit  = _hostSnapshot.roleSwapLegit;
-        voteImmune      = _hostSnapshot.voteImmune;
-        skipMeeting     = _hostSnapshot.skipMeeting;
-        forceStartGame  = _hostSnapshot.forceStartGame;
-        noGameEnd       = _hostSnapshot.noGameEnd;
-        showProtectMenu = _hostSnapshot.showProtectMenu;
-        noOptionsLimits = _hostSnapshot.noOptionsLimits;
     }
 }

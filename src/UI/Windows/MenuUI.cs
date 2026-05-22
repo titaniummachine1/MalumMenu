@@ -9,15 +9,11 @@ public class MenuUI : MonoBehaviour
     public static int windowHeight = 550;
     public static int windowWidth = 700;
     private Rect _windowRect;
-    public static Rect windowRect;
 
     public static bool isGUIActive = false;
     private List<ITab> _tabs = new();
     private int _selectedTab;
     public static float hue; // For RGB mode
-    private bool _wasHost; // Tracks previous frame host status for snapshot save/restore
-    private bool _pendingSwapVerify;
-    private float _swapVerifyTimer;
     private bool _gameWasStarted;
 
     private void Start()
@@ -158,21 +154,6 @@ public class MenuUI : MonoBehaviour
             MalumCheats.StopShipAnimCheats();
         }
 
-        var isHostNow = Utils.isClient && Utils.isHost;
-
-        // Save host-only toggle state the moment host is lost so it can be restored later
-        if (_wasHost && !isHostNow)
-        {
-            CheatToggles.SaveHostSnapshot();
-            HostRoleSwapManager.ResetState();
-        }
-
-        // Restore saved host-only state the moment host is regained
-        if (!_wasHost && isHostNow)
-            CheatToggles.RestoreHostSnapshot();
-
-        _wasHost = isHostNow;
-
         if(!Utils.isHost && !Utils.isFreePlay)
         {
             CheatToggles.killAll = false;
@@ -203,21 +184,9 @@ public class MenuUI : MonoBehaviour
             CheatToggles.ejectPlayer = false;
         }
 
-        // Post-swap verification: check ~2s after game starts that local role matches expected
-        if (_pendingSwapVerify)
-        {
-            _swapVerifyTimer -= Time.deltaTime;
-            if (_swapVerifyTimer <= 0f)
-            {
-                _pendingSwapVerify = false;
-                HostRoleSwapManager.VerifySwap();
-            }
-        }
         if (AmongUsClient.Instance != null && AmongUsClient.Instance.IsGameStarted && !_gameWasStarted)
         {
             _gameWasStarted = true;
-            _pendingSwapVerify = true;
-            _swapVerifyTimer = 2f;
             HostRoleSwapManager.ResetState();
         }
         if (AmongUsClient.Instance == null || !AmongUsClient.Instance.IsGameStarted)
@@ -233,11 +202,6 @@ public class MenuUI : MonoBehaviour
         UIHelpers.ApplyUIColor();
 
         _windowRect = GUI.Window((int)WindowId.MenuUI, _windowRect, (GUI.WindowFunction)WindowFunction, "MalumMenu v" + MalumMenu.malumVersion);
-        windowRect = _windowRect;
-
-        // Block mouse clicks from passing through to game/PPM when over menu window
-        if (_windowRect.Contains(Event.current.mousePosition) && Event.current.type == EventType.MouseDown)
-            Event.current.Use();
     }
 
     public void WindowFunction(int windowID)
