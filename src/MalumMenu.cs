@@ -182,6 +182,9 @@ public partial class MalumMenu : BasePlugin
         CheatToggles.olLogAddRemove = true;
         CheatToggles.olLogDisconnect = true;
 
+        // Legit swap on by default — safer, looks natural
+        CheatToggles.roleSwapLegit = true;
+
         Harmony.PatchAll();
 
         // UI
@@ -218,6 +221,8 @@ public partial class MalumMenu : BasePlugin
 
         SceneManager.add_sceneLoaded((Action<Scene, LoadSceneMode>) ((scene, _) =>
         {
+            HostRoleSwapManager.ResetState();
+
             if (scene.name == "MainMenu" && !(inStealthMode || isPanicked))
             {
                 // Warns about unsupported AU versions
