@@ -403,6 +403,13 @@ public static class MalumPPMCheats
         }
     }
 
+    public static void ResetRoleSwapState()
+    {
+        _roleSwapActive = false;
+        _roleSwapArmed = false;
+        _roleSwapOpening = false;
+    }
+
     public static void RoleSwapPPM()
     {
         if (CheatToggles.roleSwap)
