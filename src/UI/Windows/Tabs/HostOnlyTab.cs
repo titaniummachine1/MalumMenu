@@ -43,11 +43,9 @@ public class HostOnlyTab : ITab
         if (newRoleSwap != CheatToggles.roleSwap)
         {
             CheatToggles.roleSwap = newRoleSwap;
+            MalumPPMCheats.ResetRoleSwapState();
             if (!newRoleSwap)
-            {
                 CheatToggles.roleSwapTarget = null;
-                MalumPPMCheats.ResetRoleSwapState();
-            }
         }
 
         if (CheatToggles.roleSwap)
