@@ -16,6 +16,9 @@ public class MenuUI : MonoBehaviour
     private int _selectedTab;
     public static float hue; // For RGB mode
     private bool _wasHost; // Tracks previous frame host status for snapshot save/restore
+    private bool _pendingSwapVerify;
+    private float _swapVerifyTimer;
+    private bool _gameWasStarted;
 
     private void Start()
     {
@@ -159,7 +162,10 @@ public class MenuUI : MonoBehaviour
 
         // Save host-only toggle state the moment host is lost so it can be restored later
         if (_wasHost && !isHostNow)
+        {
             CheatToggles.SaveHostSnapshot();
+            HostRoleSwapManager.ResetState();
+        }
 
         // Restore saved host-only state the moment host is regained
         if (!_wasHost && isHostNow)
@@ -196,6 +202,26 @@ public class MenuUI : MonoBehaviour
             CheatToggles.skipMeeting = false;
             CheatToggles.ejectPlayer = false;
         }
+
+        // Post-swap verification: check ~2s after game starts that local role matches expected
+        if (_pendingSwapVerify)
+        {
+            _swapVerifyTimer -= Time.deltaTime;
+            if (_swapVerifyTimer <= 0f)
+            {
+                _pendingSwapVerify = false;
+                HostRoleSwapManager.VerifySwap();
+            }
+        }
+        if (AmongUsClient.Instance != null && AmongUsClient.Instance.IsGameStarted && !_gameWasStarted)
+        {
+            _gameWasStarted = true;
+            _pendingSwapVerify = true;
+            _swapVerifyTimer = 2f;
+            HostRoleSwapManager.ResetState();
+        }
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.IsGameStarted)
+            _gameWasStarted = false;
     }
 
     public void OnGUI()
