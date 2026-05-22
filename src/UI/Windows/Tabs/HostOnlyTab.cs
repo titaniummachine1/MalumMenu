@@ -75,6 +75,8 @@ public class HostOnlyTab : ITab
         CheatToggles.killAllImps = GUILayout.Toggle(CheatToggles.killAllImps, " Kill All Impostors");
 
         CheatToggles.killAll = GUILayout.Toggle(CheatToggles.killAll, " Kill Everyone");
+
+        CheatToggles.silentKill = GUILayout.Toggle(CheatToggles.silentKill, " Silent Kill");
     }
 
     private void DrawGameState()

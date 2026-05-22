@@ -159,6 +159,7 @@ public struct CheatToggles
     public static bool killAll;
     public static bool killAllCrew;
     public static bool killAllImps;
+    public static bool silentKill;
 
     // Passive
     public static bool unlockFeatures;

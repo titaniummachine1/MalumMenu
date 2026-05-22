@@ -161,6 +161,7 @@ public class MenuUI : MonoBehaviour
             CheatToggles.killAllCrew = false;
             CheatToggles.killAllImps = false;
             CheatToggles.killPlayer = false;
+            CheatToggles.silentKill = false;
             CheatToggles.ejectPlayer = false;
             CheatToggles.noKillCd = false;
             CheatToggles.killAnyone = false;

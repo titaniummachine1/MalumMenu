@@ -47,6 +47,12 @@ public static class PlayerControl_CmdCheckMurder
 
         if (!Utils.isHost) return true;
 
+        if (CheatToggles.silentKill)
+        {
+            PlayerControl.LocalPlayer.MurderPlayer(target, MurderResultFlags.Succeeded);
+            return false;
+        }
+
         // __instance.isKilling = true;
         PlayerControl.LocalPlayer.RpcMurderPlayer(target, true);
 
