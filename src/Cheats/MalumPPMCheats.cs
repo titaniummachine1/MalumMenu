@@ -405,7 +405,7 @@ public static class MalumPPMCheats
 
     public static void RoleSwapPPM()
     {
-        if (CheatToggles.forceRole)
+        if (CheatToggles.roleSwap)
         {
             // If a role is already chosen (e.g. restored from snapshot), skip opening picker
             if (!_roleSwapActive && !_roleSwapArmed && !_roleSwapOpening && CheatToggles.roleSwapTarget.HasValue)
@@ -453,7 +453,7 @@ public static class MalumPPMCheats
             // Menu opened successfully (no longer opening), user dismissed without picking
             if (_roleSwapActive && !_roleSwapArmed && !_roleSwapOpening && PlayerPickMenu.playerpickMenu == null)
             {
-                CheatToggles.forceRole = false;
+                CheatToggles.roleSwap = false;
                 CheatToggles.roleSwapTarget = null;
                 _roleSwapActive = false;
             }

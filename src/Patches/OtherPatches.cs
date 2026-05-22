@@ -355,7 +355,7 @@ public static class PlayerControl_RpcSetRole
         {
             return true;
         }
-        if (!CheatToggles.forceRole)
+        if (!CheatToggles.roleSwap)
         {
             return true;
         }
@@ -435,7 +435,7 @@ public static class PlayerControl_RpcSetRole
             _bufferedAssignments[localPlayer.PlayerId] = targetRole;
             _bufferedAssignments[targetPlayerId] = localOriginalRole;
         }
-        else if (CheatToggles.forceRoleLegit)
+        else if (CheatToggles.roleSwapLegit)
         {
             // PRIORITY 2: LEGIT MODE - Swap with any same-team player for natural looking result
             // We get their randomly assigned role on the team (might not be exact target)
