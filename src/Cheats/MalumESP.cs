@@ -32,8 +32,10 @@ public static class MalumESP
     {
         if (CheatToggles.zoomOut)
         {
-            if (hudManager.Chat.IsOpenOrOpening || PlayerCustomizationMenu.Instance || (Utils.isLobby && (FriendsListUI.Instance.IsOpen ||
-                GameStartManager.Instance.LobbyInfoPane.LobbyViewSettingsPane.gameObject.active || GameStartManager.Instance.RulesEditPanel))) return;
+            if (hudManager.Chat.IsOpenOrOpening || PlayerCustomizationMenu.Instance || (Utils.isLobby && (
+                (FriendsListUI.Instance != null && FriendsListUI.Instance.IsOpen) ||
+                (GameStartManager.Instance != null && GameStartManager.Instance.LobbyInfoPane != null && GameStartManager.Instance.LobbyInfoPane.LobbyViewSettingsPane != null && GameStartManager.Instance.LobbyInfoPane.LobbyViewSettingsPane.gameObject.active) ||
+                (GameStartManager.Instance != null && GameStartManager.Instance.RulesEditPanel)))) return;
 
             _resolutionChangeNeeded = true;
 
