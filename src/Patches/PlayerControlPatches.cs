@@ -79,7 +79,11 @@ public static class PlayerControl_MurderPlayer_SilentKill
             }
         }
 
-        target.gameObject.SetActive(false);
+        foreach (var renderer in target.gameObject.GetComponentsInChildren<UnityEngine.Renderer>())
+            renderer.enabled = false;
+
+        if (target.cosmetics != null)
+            target.cosmetics.gameObject.SetActive(false);
     }
 }
 
