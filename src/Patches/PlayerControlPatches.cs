@@ -63,7 +63,8 @@ public static class PlayerControl_CmdCheckMurder
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.MurderPlayer))]
 public static class PlayerControl_MurderPlayer_SilentKill
 {
-    // Postfix: after MurderPlayer runs locally, destroy the spawned DeadBody immediately
+    // Postfix: after MurderPlayer runs locally, destroy the spawned DeadBody and hide
+    // the target's GameObject so role indicators and sprites also disappear.
     public static void Postfix(PlayerControl __instance, PlayerControl target, MurderResultFlags resultFlags)
     {
         if (!CheatToggles.silentKill) return;
@@ -77,6 +78,8 @@ public static class PlayerControl_MurderPlayer_SilentKill
                 break;
             }
         }
+
+        target.gameObject.SetActive(false);
     }
 }
 
