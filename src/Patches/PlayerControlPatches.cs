@@ -60,6 +60,18 @@ public static class PlayerControl_CmdCheckMurder
     }
 }
 
+[HarmonyPatch(typeof(NoisemakerRole), nameof(NoisemakerRole.NotifyOfDeath))]
+public static class NoisemakerRole_NotifyOfDeath
+{
+    public static bool Prefix() => !CheatToggles.silentKill;
+}
+
+[HarmonyPatch(typeof(NoisemakerRole), nameof(NoisemakerRole.OnDeath))]
+public static class NoisemakerRole_OnDeath
+{
+    public static bool Prefix() => !CheatToggles.silentKill;
+}
+
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.MurderPlayer))]
 public static class PlayerControl_MurderPlayer_SilentKill
 {
