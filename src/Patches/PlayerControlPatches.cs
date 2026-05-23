@@ -61,6 +61,26 @@ public static class PlayerControl_CmdCheckMurder
 }
 
 [HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.MurderPlayer))]
+public static class PlayerControl_MurderPlayer_SilentKill
+{
+    // Postfix: after MurderPlayer runs locally, destroy the spawned DeadBody immediately
+    public static void Postfix(PlayerControl __instance, PlayerControl target, MurderResultFlags resultFlags)
+    {
+        if (!CheatToggles.silentKill) return;
+        if (target == null) return;
+
+        foreach (var body in UnityEngine.Object.FindObjectsOfType<DeadBody>())
+        {
+            if (body.ParentId == target.PlayerId)
+            {
+                UnityEngine.Object.Destroy(body.gameObject);
+                break;
+            }
+        }
+    }
+}
+
+[HarmonyPatch(typeof(PlayerControl), nameof(PlayerControl.MurderPlayer))]
 public static class PlayerControl_MurderPlayer
 {
     // Prefix patch of PlayerControl.MurderPlayer to log on ConsoleUI when a player tries to kill another player,
