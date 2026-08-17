@@ -324,16 +324,21 @@ public static class MushroomDoorSabotageMinigame_Begin
 [HarmonyPatch(typeof(Console), nameof(Console.CanUse))]
 public static class Console_CanUse
 {
+    private static bool IsActiveImpostor()
+    {
+        return CheatToggles.impostorTasks && PlayerControl.LocalPlayer?.Data?.Role?.IsImpostor == true;
+    }
+
     public static void Prefix(Console __instance, ref bool __state)
     {
-        if (!CheatToggles.impostorTasks) return;
+        if (!IsActiveImpostor()) return;
         __state = __instance.AllowImpostor;
         __instance.AllowImpostor = true;
     }
 
     public static void Postfix(Console __instance, ref bool __state)
     {
-        if (CheatToggles.impostorTasks)
+        if (IsActiveImpostor())
         {
             __instance.AllowImpostor = __state;
         }
