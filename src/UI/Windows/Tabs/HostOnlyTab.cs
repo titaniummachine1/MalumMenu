@@ -35,6 +35,22 @@ public class HostOnlyTab : ITab
 
     private void DrawGeneral()
     {
+        string roleLabel = (CheatToggles.roleSwap && CheatToggles.roleSwapTarget.HasValue)
+            ? $" Role Swap ({CheatToggles.roleSwapTarget.Value})"
+            : " Role Swap";
+
+        bool newRoleSwap = GUILayout.Toggle(CheatToggles.roleSwap, roleLabel);
+        if (newRoleSwap != CheatToggles.roleSwap)
+        {
+            CheatToggles.roleSwap = newRoleSwap;
+            MalumPPMCheats.ResetRoleSwapState();
+            if (!newRoleSwap)
+                CheatToggles.roleSwapTarget = null;
+        }
+
+        if (CheatToggles.roleSwap)
+            CheatToggles.roleSwapLegit = GUILayout.Toggle(CheatToggles.roleSwapLegit, " Legit Swap");
+
         CheatToggles.killVanished = GUILayout.Toggle(CheatToggles.killVanished, " Kill While Vanished");
 
         CheatToggles.killAnyone = GUILayout.Toggle(CheatToggles.killAnyone, " Kill Anyone");

@@ -14,6 +14,9 @@ public class MenuUI : MonoBehaviour
     private List<ITab> _tabs = new();
     private int _selectedTab;
     public static float hue; // For RGB mode
+    private bool _gameWasStarted;
+    private bool _pendingSwapVerify;
+    private float _swapVerifyTimer;
 
     private void Start()
     {
@@ -166,6 +169,9 @@ public class MenuUI : MonoBehaviour
             CheatToggles.forceStartGame = false;
             CheatToggles.skipMeeting = false;
             CheatToggles.voteImmune = false;
+            CheatToggles.roleSwap = false;
+            CheatToggles.roleSwapLegit = false;
+            CheatToggles.roleSwapTarget = null;
             CheatToggles.noGameEnd = false;
             CheatToggles.showProtectMenu = false;
             CheatToggles.showRolesMenu = false;
@@ -178,6 +184,26 @@ public class MenuUI : MonoBehaviour
             CheatToggles.skipMeeting = false;
             CheatToggles.ejectPlayer = false;
         }
+
+        if (_pendingSwapVerify)
+        {
+            _swapVerifyTimer -= Time.deltaTime;
+            if (_swapVerifyTimer <= 0f)
+            {
+                _pendingSwapVerify = false;
+                HostRoleSwapManager.VerifySwap();
+            }
+        }
+
+        if (AmongUsClient.Instance != null && AmongUsClient.Instance.IsGameStarted && !_gameWasStarted)
+        {
+            _gameWasStarted = true;
+            HostRoleSwapManager.ResetStateForNewGame();
+            _pendingSwapVerify = CheatToggles.roleSwap;
+            _swapVerifyTimer = 2f;
+        }
+        if (AmongUsClient.Instance == null || !AmongUsClient.Instance.IsGameStarted)
+            _gameWasStarted = false;
     }
 
     public void OnGUI()

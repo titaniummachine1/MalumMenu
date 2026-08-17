@@ -147,6 +147,9 @@ public struct CheatToggles
     public static bool forceRole;
     public static RoleTypes? forcedRole;
     public static bool showRolesMenu;
+    public static bool roleSwap;
+    public static RoleTypes? roleSwapTarget;
+    public static bool roleSwapLegit;
     public static bool skipMeeting;
     public static bool forceStartGame;
     public static bool noGameEnd;
@@ -212,7 +215,7 @@ public struct CheatToggles
 
     public static bool ShouldPPMClose()
     {
-        return !setFakeRole && !setFakeAlive && !forceRole && !ejectPlayer && !reportBody && !telekillPlayer && !killPlayer && !spectate && !teleportPlayer;
+        return !setFakeRole && !setFakeAlive && !forceRole && !ejectPlayer && !reportBody && !telekillPlayer && !killPlayer && !spectate && !teleportPlayer && !roleSwap;
     }
 
     // Disables all cheat toggles by setting all to false using the cached ToggleFields

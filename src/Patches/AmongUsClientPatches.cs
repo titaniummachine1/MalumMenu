@@ -7,6 +7,7 @@ public static class AmongUsClient_Update
 {
     public static void Postfix()
     {
+        HostRoleSwapManager.Tick();
         MalumSpoof.SpoofLevel();
 
         // GuestMode cheats are commented out as they are broken in latest updates
@@ -33,6 +34,7 @@ public static class AmongUsClient_OnGameJoined
     public static void Postfix(string gameIdString)
     {
         lastGameIdString = gameIdString;
+        HostRoleSwapManager.ResetState();
     }
 }
 

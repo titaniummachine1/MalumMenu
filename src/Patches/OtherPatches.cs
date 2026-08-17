@@ -48,6 +48,8 @@ public static class GameData_HandleDisconnect
     // (Avoids race-condition double counting)
     public static void Postfix(PlayerControl player)
     {
+        HostRoleSwapManager.OnPlayerDisconnected(player);
+
         if (!CheatToggles.runOverload) return;
 
         NetworkedPlayerInfo playerData = player?.Data;

@@ -18,6 +18,9 @@ public static class MalumPPMCheats
     private static bool _setFakeAliveActive;
     private static bool _forceRoleActive;
     private static RoleTypes? _oldRole = null;
+    private static bool _roleSwapActive;
+    private static bool _roleSwapArmed;
+    private static bool _roleSwapOpening;
 
     public static void ReportBodyPPM()
     {
@@ -454,6 +457,78 @@ public static class MalumPPMCheats
             if (_forceRoleActive)
             {
                 _forceRoleActive = false;
+            }
+        }
+    }
+
+    public static void ResetRoleSwapState()
+    {
+        _roleSwapActive = false;
+        _roleSwapArmed = false;
+        _roleSwapOpening = false;
+    }
+
+    public static void RoleSwapPPM()
+    {
+        if (CheatToggles.roleSwap)
+        {
+            if (!_roleSwapActive && !_roleSwapArmed && !_roleSwapOpening && CheatToggles.roleSwapTarget.HasValue)
+            {
+                _roleSwapArmed = true;
+            }
+
+            if (!_roleSwapActive && !_roleSwapArmed && !_roleSwapOpening)
+            {
+                _roleSwapOpening = true;
+
+                if (PlayerPickMenu.playerpickMenu != null)
+                {
+                    PlayerPickMenu.playerpickMenu.Close();
+                    CheatToggles.DisablePPMCheats("");
+                }
+
+                List<NetworkedPlayerInfo> playerDataList = new List<NetworkedPlayerInfo>();
+
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Impostor", OutfitPreset.Impostor, Utils.GetBehaviourByRoleType(RoleTypes.Impostor)));
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Shapeshifter", OutfitPreset.Shapeshifter, Utils.GetBehaviourByRoleType(RoleTypes.Shapeshifter)));
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Phantom", OutfitPreset.Phantom, Utils.GetBehaviourByRoleType(RoleTypes.Phantom)));
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Viper", OutfitPreset.Viper, Utils.GetBehaviourByRoleType(RoleTypes.Viper)));
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Crewmate", OutfitPreset.Crewmate, Utils.GetBehaviourByRoleType(RoleTypes.Crewmate)));
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Engineer", OutfitPreset.Engineer, Utils.GetBehaviourByRoleType(RoleTypes.Engineer)));
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Scientist", OutfitPreset.Scientist, Utils.GetBehaviourByRoleType(RoleTypes.Scientist)));
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Tracker", OutfitPreset.Tracker, Utils.GetBehaviourByRoleType(RoleTypes.Tracker)));
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Noisemaker", OutfitPreset.Noisemaker, Utils.GetBehaviourByRoleType(RoleTypes.Noisemaker)));
+                playerDataList.Add(PlayerPickMenu.CustomPPMChoice("Detective", OutfitPreset.Detective, Utils.GetBehaviourByRoleType(RoleTypes.Detective)));
+
+                PlayerPickMenu.OpenPlayerPickMenu(playerDataList, (Action)(() =>
+                {
+                    CheatToggles.roleSwapTarget = PlayerPickMenu.targetPlayerData.Role.Role;
+                    _roleSwapArmed = true;
+                }));
+
+                _roleSwapActive = true;
+                _roleSwapOpening = false;
+            }
+
+            if (_roleSwapActive && !_roleSwapArmed && !_roleSwapOpening && PlayerPickMenu.playerpickMenu == null)
+            {
+                CheatToggles.roleSwap = false;
+                CheatToggles.roleSwapTarget = null;
+                _roleSwapActive = false;
+            }
+
+            if (_roleSwapActive && _roleSwapArmed && PlayerPickMenu.playerpickMenu == null)
+            {
+                _roleSwapActive = false;
+            }
+        }
+        else
+        {
+            if (_roleSwapActive || _roleSwapArmed || _roleSwapOpening)
+            {
+                _roleSwapActive = false;
+                _roleSwapArmed = false;
+                _roleSwapOpening = false;
             }
         }
     }
